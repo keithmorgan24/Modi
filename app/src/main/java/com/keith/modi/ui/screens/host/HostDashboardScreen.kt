@@ -45,7 +45,7 @@ fun HostDashboardScreen(hostViewModel: HostViewModel = viewModel()) {
                     title = { Text("Booking Requests") },
                     navigationIcon = {
                         IconButton(onClick = { showBookingRequests = false }) {
-
+                            Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back")
                         }
                     }
                 )
@@ -65,35 +65,68 @@ fun HostDashboardScreen(hostViewModel: HostViewModel = viewModel()) {
                         }
                     }
                 } else {
-                    items(pendingBookings, key = { it.id }) { booking ->
-                        val property = myProperties.find { it.id == booking.propertyId }
+                    items(pendingBookings, key = { it.id ?: "" }) { booking ->
+                        val property = booking.property
                         Card(
                             modifier = Modifier.fillMaxWidth(),
-                            shape = RoundedCornerShape(16.dp),
-                            elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
+                            shape = RoundedCornerShape(24.dp),
+                            colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f))
                         ) {
                             Column(modifier = Modifier.padding(16.dp)) {
-                                Text(
-                                    text = property?.title ?: "Unknown Property",
-                                    style = MaterialTheme.typography.titleMedium,
-                                    fontWeight = FontWeight.Bold
-                                )
-                                Text("Guest ID: ${booking.guestId.take(8)}...", style = MaterialTheme.typography.bodySmall)
-                                Spacer(modifier = Modifier.height(8.dp))
+                                Row(verticalAlignment = Alignment.CenterVertically) {
+                                    Surface(
+                                        modifier = Modifier.size(60.dp),
+                                        shape = RoundedCornerShape(12.dp),
+                                        color = MaterialTheme.colorScheme.surface
+                                    ) {
+                                        if (property?.imageUrls?.isNotEmpty() == true) {
+                                            coil.compose.AsyncImage(
+                                                model = property.imageUrls.first(),
+                                                contentDescription = null,
+                                                modifier = Modifier.fillMaxSize(),
+                                                contentScale = androidx.compose.ui.layout.ContentScale.Crop
+                                            )
+                                        } else {
+                                            Icon(
+                                                Icons.Default.Notifications,
+                                                contentDescription = null,
+                                                modifier = Modifier.padding(12.dp),
+                                                tint = MaterialTheme.colorScheme.primary
+                                            )
+                                        }
+                                    }
+                                    Spacer(modifier = Modifier.width(16.dp))
+                                    Column {
+                                        Text(
+                                            text = property?.title ?: "Unknown Property",
+                                            style = MaterialTheme.typography.titleMedium,
+                                            fontWeight = FontWeight.Bold
+                                        )
+                                        Text(
+                                            "Guest ID: ${booking.guestId.take(8)}",
+                                            style = MaterialTheme.typography.bodySmall,
+                                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                                        )
+                                    }
+                                }
+                                
+                                Spacer(modifier = Modifier.height(16.dp))
+                                
                                 Row(
                                     modifier = Modifier.fillMaxWidth(),
-                                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                                    horizontalArrangement = Arrangement.spacedBy(12.dp)
                                 ) {
                                     Button(
-                                        onClick = { hostViewModel.approveBooking(booking.id) },
+                                        onClick = { hostViewModel.approveBooking(booking.id!!) },
                                         modifier = Modifier.weight(1f),
-                                        colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.primary)
+                                        shape = RoundedCornerShape(12.dp)
                                     ) {
                                         Text("Approve")
                                     }
                                     OutlinedButton(
-                                        onClick = { hostViewModel.rejectBooking(booking.id) },
-                                        modifier = Modifier.weight(1f)
+                                        onClick = { hostViewModel.rejectBooking(booking.id!!) },
+                                        modifier = Modifier.weight(1f),
+                                        shape = RoundedCornerShape(12.dp)
                                     ) {
                                         Text("Reject")
                                     }

@@ -3,6 +3,7 @@ package com.keith.modi.models
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.keith.modi.Supabase
+import com.keith.modi.utils.ErrorUtils
 import io.github.jan.supabase.auth.auth
 import io.github.jan.supabase.postgrest.postgrest
 import io.github.jan.supabase.postgrest.query.Columns
@@ -20,7 +21,9 @@ sealed class PropertyState {
     data class Success(
         val properties: List<Property>,
         val favorites: List<String> = emptyList(),
-        val activeBooking: Booking? = null
+        val activeBooking: Booking? = null,
+        val userBookings: List<Booking> = emptyList(),
+        val reviews: Map<String, List<Review>> = emptyMap() // Map of propertyId to its reviews
     ) : PropertyState()
     data class Error(val message: String) : PropertyState()
 }
@@ -37,14 +40,15 @@ class PropertyViewModel : ViewModel() {
         viewModelScope.launch {
             _propertyState.value = PropertyState.Loading
             try {
-                // Fetch properties and favorites in parallel
+                val userId = Supabase.client.auth.currentUserOrNull()?.id
+                
+                // Fetch properties, favorites, and bookings in parallel
                 val propertiesDeferred = async {
                     Supabase.client.postgrest["properties"]
                         .select(columns = Columns.ALL)
                         .decodeList<Property>()
                 }
 
-                val userId = Supabase.client.auth.currentUserOrNull()?.id
                 val favoritesDeferred = async {
                     if (userId != null) {
                         try {
@@ -61,18 +65,55 @@ class PropertyViewModel : ViewModel() {
                     }
                 }
 
+                val bookingsDeferred = async {
+                    if (userId != null) {
+                        try {
+                            Supabase.client.postgrest["bookings"]
+                                .select(columns = Columns.raw("*, properties(*)")) {
+                                    filter { eq("guest_id", userId) }
+                                }
+                                .decodeList<Booking>()
+                        } catch (e: Exception) {
+                            emptyList<Booking>()
+                        }
+                    } else {
+                        emptyList<Booking>()
+                    }
+                }
+
+                val reviewsDeferred = async {
+                    try {
+                        Supabase.client.postgrest["reviews"]
+                            .select()
+                            .decodeList<Review>()
+                    } catch (e: Exception) {
+                        emptyList<Review>()
+                    }
+                }
+
                 val properties = propertiesDeferred.await()
                 val favorites = favoritesDeferred.await()
+                val bookings = bookingsDeferred.await()
+                val allReviews = reviewsDeferred.await()
+
+                val reviewsByProperty = allReviews.groupBy { review ->
+                    review.propertyId ?: ""
+                }.filterKeys { it.isNotEmpty() }
 
                 val updatedProperties = properties.map { property ->
                     property.copy(isLiked = favorites.any { it.propertyId == property.id })
                 }
 
-                _propertyState.value = PropertyState.Success(updatedProperties, favorites.map { it.propertyId })
+                _propertyState.value = PropertyState.Success(
+                    properties = updatedProperties, 
+                    favorites = favorites.map { it.propertyId },
+                    userBookings = bookings,
+                    reviews = reviewsByProperty
+                )
             } catch (e: Exception) {
-                _propertyState.value = PropertyState.Error("Unable to load properties. Please check your connection.")
+                _propertyState.value = PropertyState.Error(ErrorUtils.sanitizeError(e))
                 
-                delay(1500)
+                delay(2000)
                 val mockProperties = listOf(
                     Property(
                         id = "1",
@@ -98,7 +139,6 @@ class PropertyViewModel : ViewModel() {
                         latitude = -1.2,
                         longitude = 36.8,
                         imageUrls = listOf("https://images.unsplash.com/photo-1502672260266-1c1ef2d93688"),
-                        rating = 4.5,
                         distanceKm = 0.8,
                         tags = listOf("Modern", "WiFi", "Central")
                     )
@@ -162,8 +202,9 @@ class PropertyViewModel : ViewModel() {
                     val expiryTime = System.currentTimeMillis() + (5 * 60 * 1000)
                     val expiresAt = expiryTime.toString() 
                     
+                    val bookingId = UUID.randomUUID().toString()
                     val newBooking = Booking(
-                        id = UUID.randomUUID().toString(),
+                        id = bookingId,
                         propertyId = propertyId,
                         guestId = userId,
                         status = "PENDING",
@@ -180,7 +221,7 @@ class PropertyViewModel : ViewModel() {
                     lockTimerJob?.cancel()
                     lockTimerJob = launch {
                         delay(300_000) // 5 minutes
-                        cancelBooking(newBooking.id)
+                        cancelBooking(bookingId)
                     }
                 } catch (e: Exception) {
                     // Log error: Failed to establish soft-lock

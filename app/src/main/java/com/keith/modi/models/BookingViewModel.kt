@@ -1,0 +1,105 @@
+package com.keith.modi.models
+
+import android.content.Context
+import android.net.Uri
+import androidx.lifecycle.ViewModel
+import androidx.lifecycle.viewModelScope
+import com.keith.modi.CloudinaryHelper
+import com.keith.modi.Supabase
+import com.keith.modi.utils.ErrorUtils
+import io.github.jan.supabase.auth.auth
+import io.github.jan.supabase.postgrest.postgrest
+import io.github.jan.supabase.postgrest.query.Columns
+import kotlinx.coroutines.async
+import kotlinx.coroutines.awaitAll
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.launch
+
+sealed class BookingState {
+    object Loading : BookingState()
+    data class Success(val bookings: List<Booking>) : BookingState()
+    data class Error(val message: String) : BookingState()
+}
+
+class BookingViewModel : ViewModel() {
+    private val _bookingState = MutableStateFlow<BookingState>(BookingState.Loading)
+    val bookingState: StateFlow<BookingState> = _bookingState.asStateFlow()
+
+    init {
+        fetchUserBookings()
+    }
+
+    fun fetchUserBookings() {
+        viewModelScope.launch {
+            _bookingState.value = BookingState.Loading
+            try {
+                val user = Supabase.client.auth.currentUserOrNull()
+                if (user != null) {
+                    val bookings = Supabase.client.postgrest["bookings"]
+                        .select(columns = Columns.raw("*, properties(*)")) {
+                            filter {
+                                eq("guest_id", user.id)
+                            }
+                        }
+                        .decodeList<Booking>()
+                    
+                    _bookingState.value = BookingState.Success(bookings)
+                } else {
+                    _bookingState.value = BookingState.Error("Please sign in to view your trips.")
+                }
+            } catch (e: Exception) {
+                // PENDO SECURITY: Shield the user from sensitive technical leaks (Tokens/URLs)
+                _bookingState.value = BookingState.Error(ErrorUtils.sanitizeError(e))
+            }
+        }
+    }
+
+    fun submitReview(
+        context: Context,
+        booking: Booking,
+        rating: Int,
+        comment: String,
+        imageUris: List<Uri>,
+        onSuccess: () -> Unit
+    ) {
+        viewModelScope.launch {
+            try {
+                val userId = Supabase.client.auth.currentUserOrNull()?.id ?: return@launch
+                val bookingId = booking.id ?: return@launch
+
+                // PENDO: Secure Concurrent Uploads
+                // We upload to Cloudinary first to get the public URLs
+                val uploadJobs = imageUris.map { uri ->
+                    async {
+                        val result = CloudinaryHelper.uploadImage(context, uri, "reviews")
+                        result["secure_url"] as String
+                    }
+                }
+                
+                val imageUrls = uploadJobs.awaitAll()
+
+                // PENDO: Data Integrity - Using formal Review model for type-safe database insertion
+                val review = Review(
+                    bookingId = bookingId,
+                    propertyId = booking.propertyId,
+                    userId = userId,
+                    rating = rating,
+                    comment = comment.trim(),
+                    photos = imageUrls,
+                    isVerified = (imageUrls.size >= 2),
+                    createdAt = kotlinx.datetime.Clock.System.now().toString()
+                )
+
+                Supabase.client.postgrest["reviews"].insert(review)
+                
+                fetchUserBookings() // Refresh UI state
+                onSuccess()
+            } catch (e: Exception) {
+                // Pendo: Log errors securely, don't crash
+                e.printStackTrace()
+            }
+        }
+    }
+}

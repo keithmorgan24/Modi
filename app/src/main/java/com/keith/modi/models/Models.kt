@@ -31,22 +31,23 @@ data class Property(
     @SerialName("images") val imageUrls: List<String> = emptyList(),
     @SerialName("created_at") val createdAt: String? = null,
     
-    // UI-only or extended fields
-    val rating: Double = 4.5,
+    // PENDO: UI-only fields must be transient to avoid schema mismatch with Supabase
+    @kotlinx.serialization.Transient val rating: Double = 4.5,
     @SerialName("distance_km") val distanceKm: Double = 0.0,
     val category: String = "Nearby",
     val tags: List<String> = emptyList(),
-    @SerialName("is_liked") val isLiked: Boolean = false
+    @kotlinx.serialization.Transient val isLiked: Boolean = false
 )
 
 @Serializable
 data class Booking(
-    val id: String,
+    val id: String? = null,
     @SerialName("property_id") val propertyId: String,
     @SerialName("guest_id") val guestId: String,
     val status: String, // PENDING, CONFIRMED, CANCELLED
     @SerialName("expires_at") val expiresAt: String,
-    @SerialName("fee_paid") val feePaid: Double
+    @SerialName("fee_paid") val feePaid: Double,
+    @SerialName("properties") val property: Property? = null
 )
 
 @Serializable
@@ -54,4 +55,17 @@ data class Favorite(
     @SerialName("user_id") val userId: String,
     @SerialName("property_id") val propertyId: String,
     @SerialName("created_at") val createdAt: String? = null
+)
+
+@Serializable
+data class Review(
+    val id: String? = null,
+    @SerialName("booking_id") val bookingId: String,
+    @SerialName("user_id") val userId: String,
+    val rating: Int,
+    val comment: String,
+    val photos: List<String> = emptyList(),
+    @SerialName("is_verified") val isVerified: Boolean = false,
+    @SerialName("created_at") val createdAt: String? = null,
+    @SerialName("property_id") val propertyId: String? = null
 )

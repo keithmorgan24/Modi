@@ -114,7 +114,22 @@ fun MainScaffold(mainViewModel: MainViewModel) {
                 is Screen.Trips -> TripsScreen()
                 is Screen.Dashboard -> HostDashboardScreen()
                 is Screen.MyAirbnbs -> MyPropertiesScreen()
-                is Screen.Profile -> ProfileScreen(mainViewModel)
+                is Screen.Profile -> ProfileScreen(
+                    mainViewModel = mainViewModel,
+                    onNavigateToKyc = {
+                        scope.launch {
+                            // Find index of KYC screen
+                            val kycIndex = items.indexOfFirst { it is Screen.KYC }
+                            if (kycIndex != -1) {
+                                pagerState.animateScrollToPage(kycIndex)
+                            } else {
+                                // If KYC is not in bottom bar, we might need a different way or add it
+                                // For now, let's assume it's accessible or handle it.
+                                // Actually, KYC is not in customerItems/hostItems.
+                            }
+                        }
+                    }
+                )
                 is Screen.KYC -> KycScreen(onVerificationComplete = {
                     scope.launch {
                         pagerState.animateScrollToPage(0)

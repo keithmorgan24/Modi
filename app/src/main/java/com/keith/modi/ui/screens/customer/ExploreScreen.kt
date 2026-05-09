@@ -1,7 +1,7 @@
 package com.keith.modi.screens.customer
 
 import androidx.compose.animation.animateColorAsState
-import androidx.compose.animation.core.spring
+import androidx.compose.animation.core.*
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
@@ -11,20 +11,24 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.*
+import androidx.compose.material.icons.outlined.VerifiedUser
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.viewmodel.compose.viewModel
+import coil.compose.AsyncImage
 import com.keith.modi.models.Property
 import com.keith.modi.models.PropertyState
 import com.keith.modi.models.PropertyViewModel
+import com.keith.modi.models.Review
 import com.keith.modi.ui.theme.ModiTheme
 import kotlinx.coroutines.delay
 
@@ -90,13 +94,22 @@ fun ExploreScreen(viewModel: PropertyViewModel = viewModel()) {
             ) { innerPadding ->
                 when (propertyState) {
                     is PropertyState.Loading -> {
-                        Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                            CircularProgressIndicator()
+                        Column(modifier = Modifier.padding(innerPadding)) {
+                            repeat(3) { ShimmerAirbnbCard() }
                         }
                     }
                     is PropertyState.Error -> {
                         Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                            Text((propertyState as PropertyState.Error).message)
+                            Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                                Icon(
+                                    imageVector = Icons.Default.ErrorOutline, 
+                                    contentDescription = null,
+                                    modifier = Modifier.size(48.dp), 
+                                    tint = MaterialTheme.colorScheme.error
+                                )
+                                Spacer(modifier = Modifier.height(8.dp))
+                                Text((propertyState as PropertyState.Error).message)
+                            }
                         }
                     }
                     is PropertyState.Success -> {
@@ -109,41 +122,52 @@ fun ExploreScreen(viewModel: PropertyViewModel = viewModel()) {
                             }
                         }
 
-                        LazyColumn(
-                            modifier = Modifier
-                                .fillMaxSize()
-                                .padding(innerPadding),
-                            contentPadding = PaddingValues(bottom = 16.dp)
-                        ) {
-                            item {
-                                LazyRow(
-                                    modifier = Modifier.padding(vertical = 8.dp),
-                                    contentPadding = PaddingValues(horizontal = 16.dp),
-                                    horizontalArrangement = Arrangement.spacedBy(8.dp)
-                                ) {
-                                    items(categories) { category ->
-                                        FilterChip(
-                                            selected = selectedCategory == category,
-                                            onClick = { selectedCategory = category },
-                                            label = { Text(category) },
-                                            leadingIcon = if (selectedCategory == category) {
-                                                { Icon(Icons.Default.Check, contentDescription = null, modifier = Modifier.size(16.dp)) }
-                                            } else null
-                                        )
-                                    }
+                        if (filteredProperties.isEmpty()) {
+                            Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                                Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                                    Icon(Icons.Default.SearchOff, contentDescription = null, modifier = Modifier.size(64.dp), tint = MaterialTheme.colorScheme.outline)
+                                    Text("No properties found in this category", style = MaterialTheme.typography.bodyLarge)
                                 }
                             }
+                        } else {
+                            LazyColumn(
+                                modifier = Modifier
+                                    .fillMaxSize()
+                                    .padding(innerPadding),
+                                contentPadding = PaddingValues(bottom = 16.dp)
+                            ) {
+                                item {
+                                    LazyRow(
+                                        modifier = Modifier.padding(vertical = 8.dp),
+                                        contentPadding = PaddingValues(horizontal = 16.dp),
+                                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                                    ) {
+                                        items(categories) { category ->
+                                            FilterChip(
+                                                selected = selectedCategory == category,
+                                                onClick = { selectedCategory = category },
+                                                label = { Text(category) },
+                                                leadingIcon = if (selectedCategory == category) {
+                                                    { Icon(Icons.Default.Check, contentDescription = null, modifier = Modifier.size(16.dp)) }
+                                                } else null
+                                            )
+                                        }
+                                    }
+                                }
 
-                            items(filteredProperties) { property ->
-                                AirbnbCard(
-                                    property = property,
-                                    onClick = {
-                                        selectedProperty = property
-                                        showBookingSheet = true
-                                        viewModel.createPendingBooking(property)
-                                    },
-                                    onLikeClick = { property.id?.let { viewModel.toggleLike(it) } }
-                                )
+                                items(filteredProperties) { property ->
+                                    val reviews = (propertyState as? PropertyState.Success)?.reviews?.get(property.id) ?: emptyList()
+                                    AirbnbCard(
+                                        property = property,
+                                        reviews = reviews,
+                                        onClick = {
+                                            selectedProperty = property
+                                            showBookingSheet = true
+                                            viewModel.createPendingBooking(property)
+                                        },
+                                        onLikeClick = { property.id?.let { viewModel.toggleLike(it) } }
+                                    )
+                                }
                             }
                         }
                     }
@@ -159,25 +183,23 @@ fun ExploreScreen(viewModel: PropertyViewModel = viewModel()) {
         }
 
         if (showBookingSheet && selectedProperty != null) {
+            val reviews = (propertyState as? PropertyState.Success)?.reviews?.get(selectedProperty!!.id) ?: emptyList()
             ModalBottomSheet(
                 onDismissRequest = { 
                     showBookingSheet = false
                     val activeBooking = (propertyState as? PropertyState.Success)?.activeBooking
-                    if (activeBooking != null) {
-                        viewModel.cancelBooking(activeBooking.id)
-                    }
+                    activeBooking?.id?.let { viewModel.cancelBooking(it) }
                 },
                 sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
             ) {
                 BookingSheetContent(
                     property = selectedProperty!!,
+                    reviews = reviews,
                     viewModel = viewModel,
                     onClose = { 
                         showBookingSheet = false 
                         val activeBooking = (propertyState as? PropertyState.Success)?.activeBooking
-                        if (activeBooking != null) {
-                            viewModel.cancelBooking(activeBooking.id)
-                        }
+                        activeBooking?.id?.let { viewModel.cancelBooking(it) }
                     }
                 )
             }
@@ -188,6 +210,7 @@ fun ExploreScreen(viewModel: PropertyViewModel = viewModel()) {
 @Composable
 fun AirbnbCard(
     property: Property,
+    reviews: List<Review> = emptyList(),
     onClick: () -> Unit,
     onLikeClick: () -> Unit = {}
 ) {
@@ -195,6 +218,10 @@ fun AirbnbCard(
         targetValue = if (property.isLiked) Color.Red else Color.Gray,
         animationSpec = spring(dampingRatio = 0.5f)
     )
+    
+    val verifiedCount = reviews.count { it.isVerified }
+    val averageRating = if (reviews.isNotEmpty()) reviews.map { it.rating.toDouble() }.average() else property.rating
+    val reviewCount = reviews.size
 
     Card(
         modifier = Modifier
@@ -211,7 +238,42 @@ fun AirbnbCard(
                     .height(220.dp)
                     .background(MaterialTheme.colorScheme.outlineVariant)
             ) {
-                // Image Placeholder or Coil implementation
+                AsyncImage(
+                    model = property.imageUrls.firstOrNull(),
+                    contentDescription = null,
+                    modifier = Modifier.fillMaxSize(),
+                    contentScale = ContentScale.Crop
+                )
+
+                // PENDO: Verified Badge - Enhanced with Trust Signals
+                if (verifiedCount > 0) {
+                    Surface(
+                        modifier = Modifier.padding(12.dp).align(Alignment.TopStart),
+                        color = Color(0xFFE8F5E9).copy(alpha = 0.95f),
+                        shape = RoundedCornerShape(8.dp),
+                        border = androidx.compose.foundation.BorderStroke(1.dp, Color(0xFF2E7D32).copy(alpha = 0.3f))
+                    ) {
+                        Row(
+                            modifier = Modifier.padding(horizontal = 8.dp, vertical = 6.dp),
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(4.dp)
+                        ) {
+                            Icon(
+                                Icons.Default.Verified, 
+                                contentDescription = null, 
+                                tint = Color(0xFF2E7D32), 
+                                modifier = Modifier.size(16.dp)
+                            )
+                            Text(
+                                "MODI VERIFIED", 
+                                style = MaterialTheme.typography.labelSmall.copy(letterSpacing = 0.5.sp), 
+                                fontWeight = FontWeight.ExtraBold, 
+                                color = Color(0xFF2E7D32)
+                            )
+                        }
+                    }
+                }
+
                 IconButton(
                     onClick = { onLikeClick() },
                     modifier = Modifier
@@ -235,7 +297,11 @@ fun AirbnbCard(
                     Text(text = property.title, style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
                     Row(verticalAlignment = Alignment.CenterVertically) {
                         Icon(Icons.Default.Star, contentDescription = null, tint = Color(0xFFFFB300), modifier = Modifier.size(18.dp))
-                        Text(text = " ${property.rating}", style = MaterialTheme.typography.bodyLarge, fontWeight = FontWeight.Medium)
+                        Text(
+                            text = " ${String.format("%.1f", averageRating)} ($reviewCount)",
+                            style = MaterialTheme.typography.bodyLarge,
+                            fontWeight = FontWeight.Medium
+                        )
                     }
                 }
                 Text(text = property.locationName, color = MaterialTheme.colorScheme.secondary)
@@ -320,6 +386,7 @@ fun FilterSheetContent(onApply: () -> Unit) {
 @Composable
 fun BookingSheetContent(
     property: Property,
+    reviews: List<Review>,
     viewModel: PropertyViewModel,
     onClose: () -> Unit
 ) {
@@ -373,6 +440,49 @@ fun BookingSheetContent(
                 }
             }
         }
+
+        // PENDO: Social Proof Gallery
+        val guestPhotos = reviews.flatMap { it.photos }.distinct()
+        if (guestPhotos.isNotEmpty()) {
+            Spacer(modifier = Modifier.height(24.dp))
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Text(
+                    text = "Guest Experiences",
+                    style = MaterialTheme.typography.titleMedium,
+                    fontWeight = FontWeight.Bold
+                )
+                if (reviews.any { it.isVerified }) {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Icon(Icons.Default.Verified, contentDescription = null, tint = Color(0xFF2E7D32), modifier = Modifier.size(16.dp))
+                        Spacer(modifier = Modifier.width(4.dp))
+                        Text("Verified", style = MaterialTheme.typography.labelMedium, color = Color(0xFF2E7D32))
+                    }
+                }
+            }
+            Spacer(modifier = Modifier.height(12.dp))
+            LazyRow(
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                contentPadding = PaddingValues(end = 16.dp)
+            ) {
+                items(guestPhotos) { photoUrl ->
+                    Card(
+                        shape = RoundedCornerShape(12.dp),
+                        modifier = Modifier.size(100.dp)
+                    ) {
+                        AsyncImage(
+                            model = photoUrl,
+                            contentDescription = "Guest photo",
+                            modifier = Modifier.fillMaxSize(),
+                            contentScale = ContentScale.Crop
+                        )
+                    }
+                }
+            }
+        }
         
         Spacer(modifier = Modifier.height(24.dp))
         
@@ -395,6 +505,37 @@ fun BookingSheetContent(
         
         TextButton(onClick = onClose, modifier = Modifier.fillMaxWidth()) {
             Text("Cancel and Unlock Room")
+        }
+    }
+}
+
+@Composable
+fun ShimmerAirbnbCard() {
+    val infiniteTransition = rememberInfiniteTransition(label = "shimmer")
+    val alpha by infiniteTransition.animateFloat(
+        initialValue = 0.3f,
+        targetValue = 0.7f,
+        animationSpec = infiniteRepeatable(
+            animation = tween<Float>(1000),
+            repeatMode = RepeatMode.Reverse
+        ), 
+        label = "alpha"
+    )
+
+    Card(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(horizontal = 16.dp, vertical = 8.dp),
+        shape = RoundedCornerShape(24.dp),
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = alpha))
+    ) {
+        Column {
+            Box(modifier = Modifier.fillMaxWidth().height(200.dp).background(Color.LightGray.copy(alpha = alpha)))
+            Column(modifier = Modifier.padding(16.dp)) {
+                Box(modifier = Modifier.width(150.dp).height(20.dp).background(Color.LightGray.copy(alpha = alpha)))
+                Spacer(modifier = Modifier.height(8.dp))
+                Box(modifier = Modifier.width(100.dp).height(15.dp).background(Color.LightGray.copy(alpha = alpha)))
+            }
         }
     }
 }

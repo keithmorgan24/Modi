@@ -6,9 +6,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.Logout
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
-import androidx.compose.runtime.Composable
-import androidx.compose.runtime.collectAsState
-import androidx.compose.runtime.getValue
+import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.vector.ImageVector
@@ -29,7 +27,8 @@ import com.keith.modi.ui.theme.ModiTheme
 @Composable
 fun ProfileScreen(
     mainViewModel: MainViewModel = viewModel(),
-    authViewModel: AuthViewModel = viewModel()
+    authViewModel: AuthViewModel = viewModel(),
+    onNavigateToKyc: () -> Unit = {}
 ) {
     val role by mainViewModel.currentRole.collectAsState()
     val profile by mainViewModel.userProfile.collectAsState()
@@ -38,7 +37,8 @@ fun ProfileScreen(
         profile = profile,
         currentRole = role,
         onToggleRole = { mainViewModel.toggleRole() },
-        onLogout = { authViewModel.logout() }
+        onLogout = { authViewModel.logout() },
+        onNavigateToKyc = onNavigateToKyc
     )
 }
 
@@ -51,8 +51,11 @@ fun ProfileContent(
     profile: Profile?,
     currentRole: UserRole,
     onToggleRole: () -> Unit,
-    onLogout: () -> Unit
+    onLogout: () -> Unit,
+    onNavigateToKyc: () -> Unit = {}
 ) {
+    var showDetails by remember { mutableStateOf(false) }
+
     Column(
         modifier = Modifier
             .fillMaxSize()
@@ -62,7 +65,9 @@ fun ProfileContent(
         Spacer(modifier = Modifier.height(40.dp))
 
         // Profile Avatar with Security/Verification Badge
-        Box {
+        Box(
+            modifier = Modifier.clickable { showDetails = !showDetails }
+        ) {
             Surface(
                 modifier = Modifier.size(100.dp),
                 shape = MaterialTheme.shapes.extraLarge,
@@ -111,6 +116,20 @@ fun ProfileContent(
             color = if (profile?.isKycVerified == true) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.error
         )
 
+        if (showDetails && profile != null) {
+            Spacer(modifier = Modifier.height(16.dp))
+            Card(
+                modifier = Modifier.fillMaxWidth(),
+                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.secondaryContainer.copy(alpha = 0.3f))
+            ) {
+                Column(modifier = Modifier.padding(16.dp)) {
+                    DetailItem(label = "User ID", value = profile.id)
+                    DetailItem(label = "Role", value = profile.role)
+                    profile.updatedAt?.let { DetailItem(label = "Last Updated", value = it) }
+                }
+            }
+        }
+
         Spacer(modifier = Modifier.height(40.dp))
 
         // Actions Card - Modern, grouped layout
@@ -124,7 +143,7 @@ fun ProfileContent(
                     icon = Icons.Default.VerifiedUser,
                     title = "KYC Verification",
                     subtitle = if (profile?.isKycVerified == true) "Status: Verified" else "Action required: Complete ID check",
-                    onClick = { /* Navigation to KYC handled via Pager in Navigation.kt */ }
+                    onClick = onNavigateToKyc
                 )
 
                 HorizontalDivider(modifier = Modifier.padding(vertical = 12.dp), thickness = 0.5.dp)
@@ -161,6 +180,17 @@ fun ProfileContent(
         }
 
         Spacer(modifier = Modifier.height(16.dp))
+    }
+}
+
+@Composable
+fun DetailItem(label: String, value: String) {
+    Row(
+        modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp),
+        horizontalArrangement = Arrangement.SpaceBetween
+    ) {
+        Text(label, style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.outline)
+        Text(value, style = MaterialTheme.typography.bodySmall, fontWeight = FontWeight.Medium)
     }
 }
 

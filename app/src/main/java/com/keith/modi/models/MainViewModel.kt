@@ -3,6 +3,7 @@ package com.keith.modi.models
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.keith.modi.Supabase
+import com.keith.modi.utils.ErrorUtils
 import io.github.jan.supabase.auth.auth
 import io.github.jan.supabase.postgrest.postgrest
 import io.github.jan.supabase.realtime.PostgresAction
@@ -50,7 +51,7 @@ class MainViewModel : ViewModel() {
                     _userProfile.value = profile
                 }
             } catch (e: Exception) {
-                println("Error fetching user profile: ${e.localizedMessage}")
+                println("Error fetching user profile: ${ErrorUtils.sanitizeError(e)}")
             }
         }
     }

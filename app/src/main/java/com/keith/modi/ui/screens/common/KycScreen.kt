@@ -3,15 +3,15 @@ package com.keith.modi.screens.common
 import android.net.Uri
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.slideInVertically
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Badge
-import androidx.compose.material.icons.filled.CheckCircle
-import androidx.compose.material.icons.filled.CloudUpload
-import androidx.compose.material.icons.filled.Face
+import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -23,9 +23,8 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.keith.modi.CloudinaryHelper
-import kotlinx.coroutines.launch
-
 import com.keith.modi.Supabase
+import com.keith.modi.utils.ErrorUtils
 import io.github.jan.supabase.auth.auth
 import io.github.jan.supabase.postgrest.postgrest
 import kotlinx.coroutines.launch
@@ -71,8 +70,24 @@ fun KycScreen(onVerificationComplete: () -> Unit) {
             
             Spacer(modifier = Modifier.height(32.dp))
 
-            errorMessage?.let {
-                Text(it, color = MaterialTheme.colorScheme.error, modifier = Modifier.padding(bottom = 16.dp))
+            // PENDO: Modern Error UI
+            AnimatedVisibility(visible = errorMessage != null) {
+                errorMessage?.let {
+                    Surface(
+                        color = MaterialTheme.colorScheme.errorContainer,
+                        shape = RoundedCornerShape(12.dp),
+                        modifier = Modifier.padding(bottom = 16.dp)
+                    ) {
+                        Row(
+                            modifier = Modifier.padding(12.dp),
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(8.dp)
+                        ) {
+                            Icon(Icons.Default.ErrorOutline, contentDescription = null, tint = MaterialTheme.colorScheme.error)
+                            Text(it, color = MaterialTheme.colorScheme.onErrorContainer, style = MaterialTheme.typography.labelMedium)
+                        }
+                    }
+                }
             }
 
             when (uploadStep) {
@@ -106,18 +121,15 @@ fun KycScreen(onVerificationComplete: () -> Unit) {
                                     val idUrl = idResult["secure_url"] as String
                                     val selfieUrl = selfieResult["secure_url"] as String
 
-                                    // 2. Update Supabase Profile (Simulating submittal - usually we'd have a kyc_submissions table)
-                                    // For now, we update metadata or just set a "pending" status if we had one.
-                                    // Let's assume we update the profile with these URLs or just mark as submitted.
                                     Supabase.client.postgrest["profiles"].update(
-                                        mapOf("avatar_url" to selfieUrl) // Using avatar_url as a proxy for now
+                                        mapOf("avatar_url" to selfieUrl) 
                                     ) {
                                         filter { eq("id", userId) }
                                     }
 
                                     uploadStep = 3
                                 } catch (e: Exception) {
-                                    errorMessage = e.localizedMessage ?: "Upload failed"
+                                    errorMessage = ErrorUtils.sanitizeError(e)
                                 } finally {
                                     isUploading = false
                                 }

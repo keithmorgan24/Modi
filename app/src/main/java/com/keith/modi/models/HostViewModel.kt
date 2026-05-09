@@ -6,6 +6,7 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.keith.modi.CloudinaryHelper
 import com.keith.modi.Supabase
+import com.keith.modi.utils.ErrorUtils
 import io.github.jan.supabase.auth.auth
 import io.github.jan.supabase.postgrest.postgrest
 import io.github.jan.supabase.realtime.realtime
@@ -53,7 +54,7 @@ class HostViewModel : ViewModel() {
         viewModelScope.launch {
             try {
                 val channel = Supabase.client.realtime.channel("bookings-changes")
-                channel.postgresListDataFlow<Booking, String>(
+                channel.postgresListDataFlow<Booking, String?>(
                     schema = "public",
                     table = "bookings",
                     primaryKey = Booking::id
@@ -72,32 +73,21 @@ class HostViewModel : ViewModel() {
             try {
                 val userId = Supabase.client.auth.currentUserOrNull()?.id
                 if (userId != null) {
-                    // Fetch pending bookings count
+                    // Fetch bookings for properties owned by this host using a join
                     val bookings = Supabase.client.postgrest["bookings"]
-                        .select {
+                        .select(columns = io.github.jan.supabase.postgrest.query.Columns.raw("*, properties!inner(*)")) {
                             filter {
-                                eq("status", "PENDING")
-                                // Ideally we'd join with properties to filter by hostId, 
-                                // but for simplicity if bookings have property info we can fetch all and filter
+                                eq("properties.host_id", userId)
                             }
                         }.decodeList<Booking>()
                     
-                    // Filter bookings for properties owned by this host
-                    val myPropertyIds = _myProperties.value.map { it.id }
-                    val myPendingBookings = bookings.filter { it.propertyId in myPropertyIds }
+                    val myPendingBookings = bookings.filter { it.status == "PENDING" }
                     _pendingBookings.value = myPendingBookings
                     _pendingBookingsCount.value = myPendingBookings.size
 
                     // Calculate earnings (sum of feePaid for CONFIRMED bookings)
-                    val confirmedBookings = Supabase.client.postgrest["bookings"]
-                        .select {
-                            filter {
-                                eq("status", "CONFIRMED")
-                            }
-                        }.decodeList<Booking>()
-                    _totalEarnings.value = confirmedBookings
-                        .filter { it.propertyId in myPropertyIds }
-                        .sumOf { it.feePaid }
+                    val confirmedBookings = bookings.filter { it.status == "CONFIRMED" }
+                    _totalEarnings.value = confirmedBookings.sumOf { it.feePaid }
                 }
             } catch (e: Exception) {
                 // Handle error
@@ -113,7 +103,7 @@ class HostViewModel : ViewModel() {
                     val properties = Supabase.client.postgrest["properties"]
                         .select {
                             filter {
-                                eq("hostId", userId)
+                                eq("host_id", userId)
                             }
                         }.decodeList<Property>()
                     _myProperties.value = properties
@@ -130,8 +120,10 @@ class HostViewModel : ViewModel() {
         description: String,
         price: Double,
         location: String,
-        category: String,
-        imageUris: List<Uri>
+        categories: List<String>,
+        imageUris: List<Uri>,
+        latitude: Double = -1.286389,
+        longitude: Double = 36.817223
     ) {
         viewModelScope.launch {
             _listingState.value = HostListingState.Loading
@@ -140,6 +132,9 @@ class HostViewModel : ViewModel() {
                     ?: throw Exception("User not authenticated")
 
                 val tags = mutableSetOf<String>()
+                // Add host-selected categories to tags for high-precision search
+                tags.addAll(categories)
+                
                 val imageUrls = imageUris.map { uri ->
                     val result = CloudinaryHelper.uploadImage(context, uri, "properties")
                     
@@ -161,7 +156,7 @@ class HostViewModel : ViewModel() {
                     result["secure_url"] as String
                 }
 
-                // Append AI tags to description for better searchability or use them as a separate field
+                // Append AI tags to description for better searchability
                 val enrichedDescription = if (tags.isNotEmpty()) {
                     "$description\n\n#${tags.joinToString(" #")}"
                 } else {
@@ -176,11 +171,10 @@ class HostViewModel : ViewModel() {
                     price = price,
                     locationName = location,
                     distanceKm = 0.0,
-                    rating = 0.0,
                     imageUrls = imageUrls,
-                    latitude = -1.286389, // Default to Nairobi center for now
-                    longitude = 36.817223,
-                    category = category,
+                    latitude = latitude,
+                    longitude = longitude,
+                    category = categories.firstOrNull() ?: "Nearby",
                     tags = tags.toList()
                 )
 
@@ -189,7 +183,7 @@ class HostViewModel : ViewModel() {
                 _myProperties.value += newProperty
                 _listingState.value = HostListingState.Success
             } catch (e: Exception) {
-                _listingState.value = HostListingState.Error(e.localizedMessage ?: "Failed to create listing")
+                _listingState.value = HostListingState.Error(ErrorUtils.sanitizeError(e))
             }
         }
     }
@@ -256,7 +250,7 @@ class HostViewModel : ViewModel() {
                 val updates = mapOf(
                     "title" to name,
                     "description" to description,
-                    "price" to price,
+                    "price_per_night" to price,
                     "location_name" to location,
                     "category" to category
                 )

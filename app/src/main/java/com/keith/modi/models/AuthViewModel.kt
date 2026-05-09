@@ -3,6 +3,7 @@ package com.keith.modi.models
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.keith.modi.Supabase
+import com.keith.modi.utils.ErrorUtils
 import io.github.jan.supabase.auth.auth
 import io.github.jan.supabase.auth.providers.builtin.Email
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -25,6 +26,10 @@ class AuthViewModel : ViewModel() {
     val authState: StateFlow<AuthState> = _authState.asStateFlow()
 
     fun signUp(email: String, pass: String, name: String, role: UserRole = UserRole.CUSTOMER) {
+        if (email.isBlank() || pass.isBlank() || name.isBlank()) {
+            _authState.value = AuthState.Error("Kindly fill out all details")
+            return
+        }
         viewModelScope.launch {
             _authState.value = AuthState.Loading
             try {
@@ -39,12 +44,16 @@ class AuthViewModel : ViewModel() {
                 }
                 _authState.value = AuthState.Success("Check your email for confirmation!")
             } catch (e: Exception) {
-                _authState.value = AuthState.Error(e.localizedMessage ?: "Registration failed")
+                _authState.value = AuthState.Error(ErrorUtils.sanitizeError(e))
             }
         }
     }
 
     fun login(email: String, pass: String) {
+        if (email.isBlank() || pass.isBlank()) {
+            _authState.value = AuthState.Error("Kindly fill out the details")
+            return
+        }
         viewModelScope.launch {
             _authState.value = AuthState.Loading
             try {
@@ -54,7 +63,7 @@ class AuthViewModel : ViewModel() {
                 }
                 _authState.value = AuthState.Success("Logged in successfully!")
             } catch (e: Exception) {
-                _authState.value = AuthState.Error(e.localizedMessage ?: "Login failed")
+                _authState.value = AuthState.Error(ErrorUtils.sanitizeError(e))
             }
         }
     }
@@ -73,7 +82,7 @@ class AuthViewModel : ViewModel() {
                 Supabase.client.auth.signOut()
                 _authState.value = AuthState.Idle
             } catch (e: Exception) {
-                _authState.value = AuthState.Error(e.localizedMessage ?: "Logout failed")
+                _authState.value = AuthState.Error(ErrorUtils.sanitizeError(e))
             }
         }
     }
