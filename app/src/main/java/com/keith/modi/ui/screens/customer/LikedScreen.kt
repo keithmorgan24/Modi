@@ -49,6 +49,7 @@ fun LikedScreen(viewModel: PropertyViewModel = viewModel()) {
                 }
             }
             is PropertyState.Success -> {
+                val successState = propertyState as PropertyState.Success
                 if (likedProperties.isEmpty()) {
                     Box(modifier = Modifier.fillMaxSize().padding(innerPadding), contentAlignment = Alignment.Center) {
                         Column(horizontalAlignment = Alignment.CenterHorizontally) {
@@ -65,6 +66,7 @@ fun LikedScreen(viewModel: PropertyViewModel = viewModel()) {
                         items(likedProperties) { property ->
                             AirbnbCard(
                                 property = property,
+                                reviews = successState.reviews[property.id] ?: emptyList(),
                                 onClick = { /* TODO: Navigate to details */ },
                                 onLikeClick = { property.id?.let { viewModel.toggleLike(it) } }
                             )

@@ -5,11 +5,13 @@ import io.github.jan.supabase.auth.Auth
 import io.github.jan.supabase.postgrest.Postgrest
 import io.github.jan.supabase.realtime.Realtime
 import io.github.jan.supabase.storage.Storage
+import io.github.jan.supabase.functions.Functions
 
 object Supabase {
+    // PENDO: Verified 20-character Project ID (from your Anon Key)
     private const val SUPABASE_URL = "https://beztonodgfvlrxzyxkxb.supabase.co"
     
-    // TODO: Replace with your actual Anon Key from Supabase Dashboard -> Settings -> API
+    // PENDO: Your Anon Key is tied to this 20-character reference
     private const val SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImJlenRvbm9kZ2Z2bHJ4enl4a3hiIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzgyMjkyMDYsImV4cCI6MjA5MzgwNTIwNn0.DdIC1FaWOrNGd5tFmnIVkq9jg4yVdyJHsiNXJKPahdc"
 
     val client = createSupabaseClient(
@@ -20,5 +22,6 @@ object Supabase {
         install(Auth)
         install(Realtime)
         install(Storage)
+        install(Functions)
     }
 }

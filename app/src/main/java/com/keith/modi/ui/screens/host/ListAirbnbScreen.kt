@@ -3,8 +3,10 @@ package com.keith.modi.screens.host
 import android.Manifest
 import android.annotation.SuppressLint
 import android.content.pm.PackageManager
+import android.location.Geocoder
 import android.location.Location
 import android.net.Uri
+import android.widget.Toast
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.animation.*
@@ -40,6 +42,11 @@ import com.google.android.gms.location.LocationServices
 import com.google.android.gms.location.Priority
 import com.keith.modi.models.HostListingState
 import com.keith.modi.models.HostViewModel
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
+import java.util.Locale
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -47,9 +54,13 @@ fun ListAirbnbScreen(
     onBack: () -> Unit,
     hostViewModel: HostViewModel = viewModel()
 ) {
-    var currentStep by remember { mutableIntStateOf(0) } // 0: Welcome
+    var currentStep by remember { mutableIntStateOf(0) }
     val totalSteps = 8
     
+    val snackbarHostState = remember { SnackbarHostState() }
+    val scope = rememberCoroutineScope()
+    val context = LocalContext.current
+
     // Form State
     var name by remember { mutableStateOf("") }
     var description by remember { mutableStateOf("") }
@@ -62,17 +73,45 @@ fun ListAirbnbScreen(
     var isLocationCaptured by remember { mutableStateOf(false) }
     
     val listingState by hostViewModel.listingState.collectAsState()
-    val context = LocalContext.current
+    var showSuccessDialog by remember { mutableStateOf(false) }
     val categories = listOf("Nearby", "Beachfront", "Pool", "Luxury", "Modern", "WiFi", "Central", "Cabins")
 
     LaunchedEffect(listingState) {
-        if (listingState is HostListingState.Success) {
-            hostViewModel.resetListingState()
-            onBack()
+        when (listingState) {
+            is HostListingState.Success -> {
+                showSuccessDialog = true
+            }
+            is HostListingState.Error -> {
+                snackbarHostState.showSnackbar((listingState as HostListingState.Error).message)
+            }
+            else -> {}
         }
     }
 
+    if (showSuccessDialog) {
+        AlertDialog(
+            onDismissRequest = { /* Force explicit action */ },
+            icon = { Icon(Icons.Default.CheckCircle, contentDescription = null, modifier = Modifier.size(64.dp), tint = Color(0xFF4CAF50)) },
+            title = { Text("Property Published! 🚀", fontWeight = FontWeight.ExtraBold) },
+            text = { Text("Congratulations! Your Airbnb '$name' is now live and visible to guests worldwide on Modi. Get ready for bookings! ✨", textAlign = TextAlign.Center) },
+            confirmButton = {
+                Button(
+                    onClick = {
+                        showSuccessDialog = false
+                        hostViewModel.resetListingState()
+                        onBack()
+                    },
+                    modifier = Modifier.fillMaxWidth(),
+                    shape = RoundedCornerShape(12.dp)
+                ) {
+                    Text("Awesome! Take me to Dashboard", fontWeight = FontWeight.Bold)
+                }
+            }
+        )
+    }
+
     Scaffold(
+        snackbarHost = { SnackbarHost(snackbarHostState) },
         topBar = {
             TopAppBar(
                 title = { 
@@ -145,7 +184,11 @@ fun ListAirbnbScreen(
                                 latitude = lat
                                 longitude = lon
                                 isLocationCaptured = true
-                            }
+                                scope.launch {
+                                    snackbarHostState.showSnackbar("Location verified! 📍")
+                                }
+                            },
+                            onReset = { isLocationCaptured = false }
                         )
                         4 -> SimpleInputStep(
                             title = "Where exactly is this gem located? 🏙️",
@@ -192,19 +235,44 @@ fun ListAirbnbScreen(
             if (currentStep > 0) {
                 Button(
                     onClick = {
-                        if (currentStep < totalSteps) {
-                            currentStep++
+                        val validationError = getValidationError(currentStep, name, locationName, price, selectedImages, description, selectedCategories, isLocationCaptured)
+                        if (validationError == null) {
+                            if (currentStep < totalSteps) {
+                                currentStep++
+                            } else {
+                                val priceVal = price.toDoubleOrNull() ?: 0.0
+                                hostViewModel.createListing(context, name, description, priceVal, locationName, selectedCategories.toList(), selectedImages, latitude, longitude)
+                            }
                         } else {
-                            val priceVal = price.toDoubleOrNull() ?: 0.0
-                            hostViewModel.createListing(context, name, description, priceVal, locationName, selectedCategories.toList(), selectedImages, latitude, longitude)
+                            scope.launch {
+                                snackbarHostState.showSnackbar(validationError)
+                            }
                         }
                     },
                     modifier = Modifier.fillMaxWidth().height(56.dp),
-                    enabled = isNextEnabled(currentStep, name, locationName, price, selectedImages, description, selectedCategories),
-                    shape = RoundedCornerShape(16.dp)
+                    enabled = listingState !is HostListingState.Loading,
+                    shape = RoundedCornerShape(16.dp),
+                    colors = ButtonDefaults.buttonColors(
+                        containerColor = if (getValidationError(currentStep, name, locationName, price, selectedImages, description, selectedCategories, isLocationCaptured) == null) 
+                            MaterialTheme.colorScheme.primary 
+                        else 
+                            MaterialTheme.colorScheme.outline
+                    )
                 ) {
                     if (listingState is HostListingState.Loading) {
-                        CircularProgressIndicator(modifier = Modifier.size(24.dp), color = Color.White)
+                        var loadingMsg by remember { mutableStateOf("Publishing...") }
+                        LaunchedEffect(Unit) {
+                            val messages = listOf("Uploading photos...", "Analyzing AI tags...", "Securing details...", "Almost there...")
+                            var i = 0
+                            while(true) {
+                                loadingMsg = messages[i % messages.size]
+                                delay(1500)
+                                i++
+                            }
+                        }
+                        CircularProgressIndicator(modifier = Modifier.size(20.dp), color = Color.White, strokeWidth = 2.dp)
+                        Spacer(modifier = Modifier.width(12.dp))
+                        Text(loadingMsg, fontWeight = FontWeight.Bold)
                     } else {
                         Text(if (currentStep < totalSteps) "Continue ➡️" else "Publish My Airbnb 🚀", fontWeight = FontWeight.Bold, fontSize = 16.sp)
                     }
@@ -214,16 +282,16 @@ fun ListAirbnbScreen(
     }
 }
 
-private fun isNextEnabled(step: Int, name: String, location: String, price: String, images: List<Uri>, desc: String, categories: Set<String>): Boolean {
+private fun getValidationError(step: Int, name: String, location: String, price: String, images: List<Uri>, desc: String, categories: Set<String>, locationCaptured: Boolean): String? {
     return when(step) {
-        1 -> name.isNotBlank()
-        2 -> categories.isNotEmpty()
-        3 -> true
-        4 -> location.isNotBlank()
-        5 -> price.isNotBlank()
-        6 -> images.isNotEmpty()
-        7 -> desc.isNotBlank()
-        else -> true
+        1 -> if (name.isBlank()) "Kindly fill out the property name ✨" else null
+        2 -> if (categories.isEmpty()) "Please pick at least one category 🌟" else null
+        3 -> if (!locationCaptured) "We recommend capturing your location for better visibility 📍" else null
+        4 -> if (location.isBlank()) "Kindly specify the location area 🏙️" else null
+        5 -> if (price.isBlank()) "Please set a price for your space 💰" else null
+        6 -> if (images.isEmpty()) "At least one photo is required 📸" else null
+        7 -> if (desc.isBlank()) "Tell us a bit about your space ✨" else null
+        else -> null
     }
 }
 
@@ -335,69 +403,120 @@ fun MultiCategoryStep(
 @Composable
 fun LocationCaptureStep(
     isCaptured: Boolean,
-    onLocationCaptured: (Double, Double) -> Unit
+    onLocationCaptured: (Double, Double) -> Unit,
+    onReset: () -> Unit
 ) {
     val context = LocalContext.current
     val fusedLocationClient = remember { LocationServices.getFusedLocationProviderClient(context) }
-    
+    var isCapturing by remember { mutableStateOf(false) }
+    var showRationale by remember { mutableStateOf(false) }
+    var capturedAddress by remember { mutableStateOf<String?>(null) }
+    val scope = rememberCoroutineScope()
+
+    // Internal function to perform actual fetch
+    val performFetch = {
+        isCapturing = true
+        fusedLocationClient.getCurrentLocation(Priority.PRIORITY_HIGH_ACCURACY, null)
+            .addOnSuccessListener { location: Location? ->
+                if (location != null) {
+                    scope.launch(Dispatchers.IO) {
+                        try {
+                            val geocoder = Geocoder(context, Locale.getDefault())
+                            val addresses = geocoder.getFromLocation(location.latitude, location.longitude, 1)
+                            withContext(Dispatchers.Main) {
+                                capturedAddress = addresses?.firstOrNull()?.getAddressLine(0) ?: "Lat: ${location.latitude}, Lon: ${location.longitude}"
+                                onLocationCaptured(location.latitude, location.longitude)
+                                isCapturing = false
+                            }
+                        } catch (e: Exception) {
+                            withContext(Dispatchers.Main) {
+                                capturedAddress = "Lat: ${location.latitude}, Lon: ${location.longitude}"
+                                onLocationCaptured(location.latitude, location.longitude)
+                                isCapturing = false
+                            }
+                        }
+                    }
+                } else {
+                    // Fallback to last location
+                    fusedLocationClient.lastLocation.addOnSuccessListener { lastLoc ->
+                        isCapturing = false
+                        if (lastLoc != null) {
+                            onLocationCaptured(lastLoc.latitude, lastLoc.longitude)
+                        } else {
+                            Toast.makeText(context, "Unable to find location. Please ensure GPS is ON.", Toast.LENGTH_LONG).show()
+                        }
+                    }
+                }
+            }
+            .addOnFailureListener {
+                isCapturing = false
+                Toast.makeText(context, "Location capture failed. Check permissions.", Toast.LENGTH_LONG).show()
+            }
+    }
+
     val locationPermissionLauncher = rememberLauncherForActivityResult(
         ActivityResultContracts.RequestPermission()
     ) { isGranted ->
-        if (isGranted) {
-            fusedLocationClient.getCurrentLocation(Priority.PRIORITY_HIGH_ACCURACY, null).addOnSuccessListener { location: Location? ->
-                location?.let {
-                    onLocationCaptured(it.latitude, it.longitude)
-                }
-            }
-        }
+        if (isGranted) performFetch()
     }
 
-    Column(modifier = Modifier.fillMaxWidth(), horizontalAlignment = Alignment.CenterHorizontally) {
+    if (showRationale) {
+        AlertDialog(
+            onDismissRequest = { showRationale = false },
+            title = { Text("Location Permission 📍") },
+            text = { Text("Modi needs location access to pinpoint your Airbnb for guests. We protect your data and only use it for this listing.") },
+            confirmButton = {
+                Button(onClick = {
+                    showRationale = false
+                    locationPermissionLauncher.launch(Manifest.permission.ACCESS_FINE_LOCATION)
+                }) { Text("Allow") }
+            },
+            dismissButton = { TextButton(onClick = { showRationale = false }) { Text("Cancel") } }
+        )
+    }
+
+    Column(modifier = Modifier.fillMaxWidth().verticalScroll(rememberScrollState()), horizontalAlignment = Alignment.CenterHorizontally) {
         Icon(Icons.Default.LocationOn, contentDescription = null, modifier = Modifier.size(80.dp), tint = MaterialTheme.colorScheme.primary)
         Spacer(modifier = Modifier.height(16.dp))
-        Text("Let's pinpoint your place! 📍", style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.Bold, textAlign = TextAlign.Center)
-        Spacer(modifier = Modifier.height(12.dp))
-        Text(
-            "For the best experience, we recommend capturing your precise location right now. This helps guests find you easily! 🏠✨",
-            style = MaterialTheme.typography.bodyMedium,
-            textAlign = TextAlign.Center,
-            color = MaterialTheme.colorScheme.secondary
-        )
-
-        Spacer(modifier = Modifier.height(48.dp))
+        Text("Pinpoint your place! 📍", style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.Bold)
+        
+        Spacer(modifier = Modifier.height(40.dp))
 
         if (isCaptured) {
             Card(
                 colors = CardDefaults.cardColors(containerColor = Color(0xFFE8F5E9)),
-                shape = RoundedCornerShape(16.dp)
+                shape = RoundedCornerShape(24.dp),
+                modifier = Modifier.fillMaxWidth()
             ) {
-                Row(modifier = Modifier.padding(16.dp), verticalAlignment = Alignment.CenterVertically) {
-                    Icon(Icons.Default.CheckCircle, contentDescription = null, tint = Color(0xFF2E7D32))
-                    Spacer(modifier = Modifier.width(12.dp))
-                    Text("Precise location captured successfully!", fontWeight = FontWeight.Bold, color = Color(0xFF2E7D32))
+                Column(modifier = Modifier.padding(24.dp), horizontalAlignment = Alignment.CenterHorizontally) {
+                    Icon(Icons.Default.CheckCircle, contentDescription = null, tint = Color(0xFF2E7D32), modifier = Modifier.size(48.dp))
+                    Spacer(modifier = Modifier.height(16.dp))
+                    Text("Captured!", fontWeight = FontWeight.Bold, color = Color(0xFF2E7D32), fontSize = 18.sp)
+                    Text(text = capturedAddress ?: "Location Secured", textAlign = TextAlign.Center, color = Color(0xFF2E7D32).copy(alpha = 0.8f))
+                    Spacer(modifier = Modifier.height(16.dp))
+                    OutlinedButton(onClick = onReset) { Text("Retake 🔄") }
                 }
             }
         } else {
             Button(
                 onClick = {
                     if (ContextCompat.checkSelfPermission(context, Manifest.permission.ACCESS_FINE_LOCATION) == PackageManager.PERMISSION_GRANTED) {
-                        fusedLocationClient.getCurrentLocation(Priority.PRIORITY_HIGH_ACCURACY, null).addOnSuccessListener { location: Location? ->
-                            location?.let { onLocationCaptured(it.latitude, it.longitude) }
-                        }
+                        performFetch()
                     } else {
-                        locationPermissionLauncher.launch(Manifest.permission.ACCESS_FINE_LOCATION)
+                        showRationale = true
                     }
                 },
-                modifier = Modifier.fillMaxWidth().height(56.dp),
-                shape = RoundedCornerShape(16.dp)
+                modifier = Modifier.fillMaxWidth().height(64.dp),
+                shape = RoundedCornerShape(16.dp),
+                enabled = !isCapturing
             ) {
-                Text("Capture My Current Location 📍", fontWeight = FontWeight.Bold)
-            }
-            
-            Spacer(modifier = Modifier.height(16.dp))
-            
-            TextButton(onClick = { /* Skip or manual fallback handled by next step */ }) {
-                Text("I'll provide coordinates manually later", color = MaterialTheme.colorScheme.secondary)
+                if (isCapturing) {
+                    CircularProgressIndicator(modifier = Modifier.size(24.dp), color = Color.White)
+                    Spacer(modifier = Modifier.width(12.dp))
+                    Text("Locating... 🛰️")
+                } else {
+                    Text("Capture My Location 📍", fontWeight = FontWeight.Bold)
+                }
             }
         }
     }

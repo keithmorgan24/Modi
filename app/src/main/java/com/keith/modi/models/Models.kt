@@ -31,11 +31,12 @@ data class Property(
     @SerialName("images") val imageUrls: List<String> = emptyList(),
     @SerialName("created_at") val createdAt: String? = null,
     
-    // PENDO: UI-only fields must be transient to avoid schema mismatch with Supabase
+    // PENDO: These fields are now transient to match your 10-column Supabase schema
+    // This prevents "400 Bad Request" errors during publishing.
     @kotlinx.serialization.Transient val rating: Double = 4.5,
-    @SerialName("distance_km") val distanceKm: Double = 0.0,
-    val category: String = "Nearby",
-    val tags: List<String> = emptyList(),
+    @kotlinx.serialization.Transient val distanceKm: Double = 0.0,
+    @kotlinx.serialization.Transient val category: String = "Nearby",
+    @kotlinx.serialization.Transient val tags: List<String> = emptyList(),
     @kotlinx.serialization.Transient val isLiked: Boolean = false
 )
 

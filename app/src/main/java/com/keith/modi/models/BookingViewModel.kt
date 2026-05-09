@@ -10,11 +10,18 @@ import com.keith.modi.utils.ErrorUtils
 import io.github.jan.supabase.auth.auth
 import io.github.jan.supabase.postgrest.postgrest
 import io.github.jan.supabase.postgrest.query.Columns
+import io.github.jan.supabase.realtime.PostgresAction
+import io.github.jan.supabase.realtime.Realtime
+import io.github.jan.supabase.realtime.channel
+import io.github.jan.supabase.realtime.decodeRecord
+import io.github.jan.supabase.realtime.postgresChangeFlow
 import kotlinx.coroutines.async
 import kotlinx.coroutines.awaitAll
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.launchIn
+import kotlinx.coroutines.flow.onEach
 import kotlinx.coroutines.launch
 
 sealed class BookingState {
@@ -29,6 +36,49 @@ class BookingViewModel : ViewModel() {
 
     init {
         fetchUserBookings()
+        setupRealtime()
+    }
+
+    private fun setupRealtime() {
+        val user = Supabase.client.auth.currentUserOrNull() ?: return
+        viewModelScope.launch {
+            try {
+                val channel = Supabase.client.channel("bookings-live")
+                val bookingFlow = channel.postgresChangeFlow<PostgresAction>(schema = "public") {
+                    table = "bookings"
+                }
+
+                bookingFlow.onEach { action ->
+                    val currentState = _bookingState.value
+                    if (currentState is BookingState.Success) {
+                        when (action) {
+                            is PostgresAction.Insert -> {
+                                val newBooking = action.decodeRecord<Booking>()
+                                if (newBooking.guestId == user.id) {
+                                    fetchUserBookings() 
+                                }
+                            }
+                            is PostgresAction.Update -> {
+                                val updatedBooking = action.decodeRecord<Booking>()
+                                if (updatedBooking.guestId == user.id) {
+                                    val updatedList = currentState.bookings.map {
+                                        if (it.id == updatedBooking.id) {
+                                            updatedBooking.copy(property = it.property)
+                                        } else it
+                                    }
+                                    _bookingState.value = BookingState.Success(updatedList)
+                                }
+                            }
+                            else -> {}
+                        }
+                    }
+                }.launchIn(viewModelScope)
+
+                channel.subscribe()
+            } catch (e: Exception) {
+                // Silent failure
+            }
+        }
     }
 
     fun fetchUserBookings() {
