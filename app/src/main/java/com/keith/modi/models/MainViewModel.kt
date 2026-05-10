@@ -1,17 +1,18 @@
 package com.keith.modi.models
 
-import androidx.lifecycle.ViewModel
+import android.app.Application
+import android.content.Context
+import androidx.core.content.edit
+import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import com.keith.modi.Supabase
-import com.keith.modi.utils.ErrorUtils
 import io.github.jan.supabase.auth.auth
+import io.github.jan.supabase.auth.status.SessionStatus
 import io.github.jan.supabase.postgrest.postgrest
 import io.github.jan.supabase.realtime.PostgresAction
 import io.github.jan.supabase.realtime.channel
 import io.github.jan.supabase.realtime.decodeRecord
 import io.github.jan.supabase.realtime.postgresChangeFlow
-import io.github.jan.supabase.auth.auth
-import io.github.jan.supabase.auth.status.SessionStatus
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -22,10 +23,8 @@ import kotlinx.serialization.json.contentOrNull
 import kotlinx.serialization.json.jsonPrimitive
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.encodeToString
-import android.content.Context
-import com.keith.modi.utils.NetworkUtils
 
-class MainViewModel : ViewModel() {
+class MainViewModel(application: Application) : AndroidViewModel(application) {
     private val _userProfile = MutableStateFlow<Profile?>(null)
     val userProfile: StateFlow<Profile?> = _userProfile.asStateFlow()
 
@@ -41,11 +40,10 @@ class MainViewModel : ViewModel() {
     private val _showOfflineDialog = MutableStateFlow(false)
     val showOfflineDialog: StateFlow<Boolean> = _showOfflineDialog.asStateFlow()
 
-    private var context: Context? = null
     private val json = Json { ignoreUnknownKeys = true }
+    private val prefs = application.getSharedPreferences("modi_cache", Context.MODE_PRIVATE)
 
-    fun initContext(ctx: Context) {
-        this.context = ctx
+    init {
         loadCachedProfile()
         observeSessionStatus()
         listenToProfileChanges()
@@ -89,14 +87,12 @@ class MainViewModel : ViewModel() {
                         _userProfile.value = profile
                         cacheProfile(profile)
                         
-                        // Sync current role from profile
                         try {
                             _currentRole.value = UserRole.valueOf(profile.role)
                         } catch (e: Exception) {
                             _currentRole.value = UserRole.CUSTOMER
                         }
                     } catch (e: Exception) {
-                        // PENDO: RESilient Fallback - If DB row is missing, use Auth Metadata
                         val name = user.userMetadata?.get("full_name")?.jsonPrimitive?.contentOrNull
                         val avatar = user.userMetadata?.get("avatar_url")?.jsonPrimitive?.contentOrNull
                         val roleStr = user.userMetadata?.get("role")?.jsonPrimitive?.contentOrNull ?: "CUSTOMER"
@@ -118,7 +114,7 @@ class MainViewModel : ViewModel() {
                     }
                     _isGuest.value = false
                 } else {
-                    if (isOnline.value) {
+                    if (_isOnline.value) {
                         _userProfile.value = null
                     }
                 }
@@ -129,29 +125,20 @@ class MainViewModel : ViewModel() {
     }
 
     private fun cacheProfile(profile: Profile) {
-        context?.let {
-            val prefs = it.getSharedPreferences("modi_cache", Context.MODE_PRIVATE)
-            prefs.edit().putString("cached_profile", json.encodeToString(profile)).apply()
-        }
+        prefs.edit { putString("cached_profile", json.encodeToString(profile)) }
     }
 
     private fun loadCachedProfile() {
-        context?.let {
-            val prefs = it.getSharedPreferences("modi_cache", Context.MODE_PRIVATE)
-            val profileStr = prefs.getString("cached_profile", null)
-            if (profileStr != null) {
-                try {
-                    _userProfile.value = json.decodeFromString<Profile>(profileStr)
-                } catch (e: Exception) {}
-            }
+        val profileStr = prefs.getString("cached_profile", null)
+        if (profileStr != null) {
+            try {
+                _userProfile.value = json.decodeFromString<Profile>(profileStr)
+            } catch (e: Exception) {}
         }
     }
 
     private fun clearCachedProfile() {
-        context?.let {
-            val prefs = it.getSharedPreferences("modi_cache", Context.MODE_PRIVATE)
-            prefs.edit().remove("cached_profile").apply()
-        }
+        prefs.edit { remove("cached_profile") }
     }
 
     fun showOfflineNotice() {

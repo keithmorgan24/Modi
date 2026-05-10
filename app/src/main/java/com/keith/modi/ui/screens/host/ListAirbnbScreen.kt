@@ -55,7 +55,7 @@ fun ListAirbnbScreen(
     hostViewModel: HostViewModel = viewModel()
 ) {
     var currentStep by remember { mutableIntStateOf(0) }
-    val totalSteps = 8
+    val totalSteps = 9
     
     val snackbarHostState = remember { SnackbarHostState() }
     val scope = rememberCoroutineScope()
@@ -65,6 +65,7 @@ fun ListAirbnbScreen(
     var name by remember { mutableStateOf("") }
     var description by remember { mutableStateOf("") }
     var price by remember { mutableStateOf("") }
+    var totalRooms by remember { mutableStateOf("1") }
     var locationName by remember { mutableStateOf("") }
     var selectedCategories by remember { mutableStateOf(setOf<String>()) }
     var selectedImages by remember { mutableStateOf<List<Uri>>(emptyList()) }
@@ -198,6 +199,14 @@ fun ListAirbnbScreen(
                             placeholder = "Area or Neighborhood..."
                         )
                         5 -> SimpleInputStep(
+                            title = "How many rooms are in this space? 🛌",
+                            description = "This helps manage occupancy and prevent double-booking.",
+                            value = totalRooms,
+                            onValueChange = { totalRooms = it },
+                            placeholder = "Number of rooms",
+                            keyboardType = KeyboardType.Number
+                        )
+                        6 -> SimpleInputStep(
                             title = "How much should guests pay per night? 💰",
                             description = "Competitive prices attract more bookings!",
                             value = price,
@@ -205,12 +214,12 @@ fun ListAirbnbScreen(
                             placeholder = "Price in Ksh",
                             keyboardType = KeyboardType.Number
                         )
-                        6 -> ListingPhotosStep(
+                        7 -> ListingPhotosStep(
                             selectedImages = selectedImages,
                             onImagesSelected = { selectedImages = selectedImages + it },
                             onRemoveImage = { selectedImages = selectedImages - it }
                         )
-                        7 -> SimpleInputStep(
+                        8 -> SimpleInputStep(
                             title = "Tell us more about your space ✨",
                             description = "Mention unique features like 'Private terrace with sunset view'.",
                             value = description,
@@ -218,7 +227,7 @@ fun ListAirbnbScreen(
                             placeholder = "Describe your place...",
                             isSingleLine = false
                         )
-                        8 -> ListingReviewStep(
+                        9 -> ListingReviewStep(
                             name = name,
                             location = locationName,
                             price = price,
@@ -241,7 +250,8 @@ fun ListAirbnbScreen(
                                 currentStep++
                             } else {
                                 val priceVal = price.toDoubleOrNull() ?: 0.0
-                                hostViewModel.createListing(context, name, description, priceVal, locationName, selectedCategories.toList(), selectedImages, latitude, longitude)
+                                val roomsVal = totalRooms.toIntOrNull() ?: 1
+                                hostViewModel.createListing(context, name, description, priceVal, locationName, selectedCategories.toList(), selectedImages, latitude, longitude, roomsVal)
                             }
                         } else {
                             scope.launch {

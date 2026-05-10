@@ -1,21 +1,30 @@
-# Add project specific ProGuard rules here.
-# You can control the set of applied configuration files using the
-# proguardFiles setting in build.gradle.
-#
-# For more details, see
-#   http://developer.android.com/guide/developing/tools/proguard.html
+# Modi Production Proguard Rules
 
-# If your project uses WebView with JS, uncomment the following
-# and specify the fully qualified class name to the JavaScript interface
-# class:
-#-keepclassmembers class fqcn.of.javascript.interface.for.webview {
-#   public *;
-#}
+# PENDO: Shield Kotlin Serialization
+-keepattributes *Annotation*, EnclosingMethod, InnerClasses, Signature
+-keepclassmembers class ** {
+    @kotlinx.serialization.Serializable *;
+}
+-keepclassmembers class ** {
+    @kotlinx.serialization.SerialName *;
+}
+-keep class kotlinx.serialization.json.** { *; }
 
-# Uncomment this to preserve the line number information for
-# debugging stack traces.
-#-keepattributes SourceFile,LineNumberTable
+# PENDO: Protect Supabase & Ktor (Networking)
+-keep class io.github.jan.supabase.** { *; }
+-keep class io.ktor.** { *; }
+-keep class okhttp3.** { *; }
+-keepattributes RuntimeVisibleAnnotations, RuntimeVisibleParameterAnnotations
 
-# If you keep the line number information, uncomment this to
-# hide the original source file name.
-#-renamesourcefileattribute SourceFile
+# PENDO: Protect Cloudinary & Coil (Images)
+-keep class com.cloudinary.** { *; }
+-keep class coil.** { *; }
+
+# PENDO: Protect Google Maps
+-keep class com.google.android.gms.maps.** { *; }
+-keep class com.google.android.libraries.maps.** { *; }
+
+# General safety
+-dontwarn io.github.jan.supabase.**
+-dontwarn io.ktor.**
+-dontwarn kotlinx.serialization.**

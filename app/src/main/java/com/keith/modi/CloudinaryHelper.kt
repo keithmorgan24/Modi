@@ -17,11 +17,12 @@ object CloudinaryHelper {
      */
     suspend fun uploadImage(context: Context, imageUri: Uri, folder: String = "properties"): Map<*, *> {
         return suspendCancellableCoroutine { continuation ->
+            // PENDO: Using UNSIGNED uploads for security.
+            // Create a preset in your Cloudinary Dashboard with detected tags enabled.
             MediaManager.get().upload(imageUri)
+                .option("upload_preset", "modi_unsigned_preset") 
                 .option("folder", "modi/$folder")
                 .option("resource_type", "image")
-                .option("categorization", "google_tagging") // Enable AI tagging
-                .option("auto_tagging", 0.7) // Confidence threshold
                 .callback(object : UploadCallback {
                     override fun onStart(requestId: String) {}
                     override fun onProgress(requestId: String, bytes: Long, totalBytes: Long) {}

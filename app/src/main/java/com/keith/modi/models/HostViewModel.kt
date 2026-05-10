@@ -123,7 +123,8 @@ class HostViewModel : ViewModel() {
         categories: List<String>,
         imageUris: List<Uri>,
         latitude: Double = -1.286389,
-        longitude: Double = 36.817223
+        longitude: Double = 36.817223,
+        totalRooms: Int = 1
     ) {
         viewModelScope.launch {
             _listingState.value = HostListingState.Loading
@@ -175,7 +176,9 @@ class HostViewModel : ViewModel() {
                     latitude = latitude,
                     longitude = longitude,
                     category = categories.firstOrNull() ?: "Nearby",
-                    tags = tags.toList()
+                    tags = tags.toList(),
+                    totalRooms = totalRooms,
+                    occupiedRooms = 0
                 )
 
                 Supabase.client.postgrest["properties"].insert(newProperty)
@@ -265,6 +268,23 @@ class HostViewModel : ViewModel() {
                         locationName = location,
                         category = category
                     ) else it
+                }
+            } catch (e: Exception) {
+                // Handle error
+            }
+        }
+    }
+
+    fun updatePropertyOccupancy(id: String, occupiedCount: Int) {
+        viewModelScope.launch {
+            try {
+                Supabase.client.postgrest["properties"].update(
+                    mapOf("occupied_rooms" to occupiedCount)
+                ) {
+                    filter { eq("id", id) }
+                }
+                _myProperties.value = _myProperties.value.map {
+                    if (it.id == id) it.copy(occupiedRooms = occupiedCount) else it
                 }
             } catch (e: Exception) {
                 // Handle error

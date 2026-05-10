@@ -1,0 +1,31 @@
+<?xml version="1.0" encoding="utf-8"?>
+<network-security-config>
+    <!-- PENDO: Production Hardening -->
+    <base-config cleartextTrafficPermitted="false">
+        <trust-anchors>
+            <certificates src="system" />
+        </trust-anchors>
+    </base-config>
+
+    <!-- PENDO: Specific domain hardening for Supabase -->
+    <domain-config>
+        <domain includeSubdomains="true">beztonodgfvlrxzyxkxb.supabase.co</domain>
+        <trust-anchors>
+            <certificates src="system" />
+        </trust-anchors>
+        <!--
+           Expert Note: For high-security apps, you can add <pin-set> here.
+           However, Supabase certificates rotate frequently. Enforcing
+           system-only CAs (no user-installed certs) is the best balance
+           for most production apps.
+        -->
+    </domain-config>
+
+    <!-- PENDO: Specific domain hardening for Cloudinary -->
+    <domain-config>
+        <domain includeSubdomains="true">cloudinary.com</domain>
+        <trust-anchors>
+            <certificates src="system" />
+        </trust-anchors>
+    </domain-config>
+</network-security-config>

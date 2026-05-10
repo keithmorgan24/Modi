@@ -5,9 +5,11 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.MoreVert
+import androidx.compose.material.icons.filled.Remove
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -49,6 +51,7 @@ fun MyPropertiesScreen(hostViewModel: HostViewModel = viewModel()) {
                 items(myProperties) { property ->
                     ManagedPropertyCard(
                         property = property,
+                        hostViewModel = hostViewModel,
                         onDelete = { propertyToDelete = property }
                     )
                 }
@@ -84,6 +87,7 @@ fun MyPropertiesScreen(hostViewModel: HostViewModel = viewModel()) {
 @Composable
 fun ManagedPropertyCard(
     property: Property,
+    hostViewModel: HostViewModel,
     onDelete: () -> Unit
 ) {
     Card(
@@ -148,6 +152,46 @@ fun ManagedPropertyCard(
                             contentDescription = "Delete",
                             tint = MaterialTheme.colorScheme.error
                         )
+                    }
+                }
+            }
+
+            // PENDO: Modern Inventory Management UI
+            HorizontalDivider(modifier = Modifier.padding(horizontal = 16.dp), thickness = 0.5.dp, color = MaterialTheme.colorScheme.outlineVariant)
+            
+            Row(
+                modifier = Modifier.padding(16.dp).fillMaxWidth(),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.SpaceBetween
+            ) {
+                Column {
+                    Text("Occupancy Status", style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.secondary)
+                    Text(
+                        if (property.isFull) "FULL - No Vacancy 🔴" else "${property.vacantRooms} of ${property.totalRooms} Rooms Available 🟢",
+                        style = MaterialTheme.typography.bodySmall,
+                        fontWeight = FontWeight.Bold
+                    )
+                }
+                
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    IconButton(
+                        onClick = { 
+                            val newOccupied = (property.occupiedRooms - 1).coerceAtLeast(0)
+                            hostViewModel.updatePropertyOccupancy(property.id!!, newOccupied)
+                        },
+                        enabled = property.occupiedRooms > 0
+                    ) {
+                        Icon(Icons.Default.Remove, null, tint = MaterialTheme.colorScheme.primary)
+                    }
+                    Text("${property.occupiedRooms}", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.ExtraBold)
+                    IconButton(
+                        onClick = { 
+                            val newOccupied = (property.occupiedRooms + 1).coerceAtMost(property.totalRooms)
+                            hostViewModel.updatePropertyOccupancy(property.id!!, newOccupied)
+                        },
+                        enabled = property.occupiedRooms < property.totalRooms
+                    ) {
+                        Icon(Icons.Default.Add, null, tint = MaterialTheme.colorScheme.primary)
                     }
                 }
             }

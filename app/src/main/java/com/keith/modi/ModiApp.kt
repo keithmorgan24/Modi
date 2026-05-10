@@ -31,11 +31,6 @@ fun ModiApp(mainViewModel: MainViewModel = viewModel()) {
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
     
-    // PENDO: Initialize ViewModels with Context for Caching/Persistence
-    LaunchedEffect(Unit) {
-        mainViewModel.initContext(context)
-    }
-    
     // PENDO: Intelligent Offline Monitoring
     val isOnline by mainViewModel.isOnline.collectAsState()
     

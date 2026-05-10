@@ -25,6 +25,9 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.viewmodel.compose.viewModel
 import coil.compose.AsyncImage
+import android.content.Intent
+import android.net.Uri
+import androidx.compose.ui.platform.LocalContext
 import com.keith.modi.models.Property
 import com.keith.modi.models.PropertyState
 import com.keith.modi.models.PropertyViewModel
@@ -183,6 +186,7 @@ fun BookingSheetContent(
     val activeBooking = successState?.activeBooking
     val isBookingLoading = successState?.isBookingLoading ?: false
     val bookingError = successState?.bookingError
+    val context = LocalContext.current
     
     Column(modifier = Modifier.fillMaxHeight(0.8f).padding(24.dp).verticalScroll(rememberScrollState()).navigationBarsPadding()) {
         Text("Confirm Your Stay", style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.Bold)
@@ -239,6 +243,13 @@ fun BookingSheetContent(
             onClick = { 
                 if (activeBooking != null) {
                     viewModel.confirmBooking(activeBooking.id!!)
+                    
+                    // PENDO: Trigger Google Maps Navigation on success
+                    val uri = Uri.parse("google.navigation:q=${property.latitude},${property.longitude}")
+                    val mapIntent = Intent(Intent.ACTION_VIEW, uri)
+                    mapIntent.setPackage("com.google.android.apps.maps")
+                    context.startActivity(mapIntent)
+                    
                     onClose()
                 } else {
                     viewModel.createPendingBooking(property)
@@ -246,9 +257,10 @@ fun BookingSheetContent(
             },
             modifier = Modifier.fillMaxWidth().height(56.dp),
             shape = RoundedCornerShape(16.dp),
-            enabled = !isBookingLoading
+            enabled = !isBookingLoading && !property.isFull
         ) {
             if (isBookingLoading) CircularProgressIndicator(modifier = Modifier.size(24.dp), color = Color.White)
+            else if (property.isFull) Text("FULLY BOOKED 🔴", fontWeight = FontWeight.Bold)
             else Text(if (activeBooking == null) "Secure My Room 🔒" else "Confirm Booking 🚀", fontWeight = FontWeight.Bold)
         }
         TextButton(onClick = onClose, modifier = Modifier.fillMaxWidth()) { Text("Go Back", color = MaterialTheme.colorScheme.secondary) }

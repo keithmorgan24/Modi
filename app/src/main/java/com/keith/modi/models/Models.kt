@@ -31,6 +31,8 @@ data class Property(
     val longitude: Double? = null,
     @SerialName("images") val imageUrls: List<String> = emptyList(),
     @SerialName("created_at") val createdAt: String? = null,
+    @SerialName("total_rooms") val totalRooms: Int = 1,
+    @SerialName("occupied_rooms") val occupiedRooms: Int = 0,
     
     // PENDO: These fields are now transient to match your 10-column Supabase schema
     // This prevents "400 Bad Request" errors during publishing.
@@ -39,7 +41,10 @@ data class Property(
     @kotlinx.serialization.Transient val category: String = "Nearby",
     @kotlinx.serialization.Transient val tags: List<String> = emptyList(),
     @kotlinx.serialization.Transient val isLiked: Boolean = false
-)
+) {
+    val isFull: Boolean get() = occupiedRooms >= totalRooms
+    val vacantRooms: Int get() = (totalRooms - occupiedRooms).coerceAtLeast(0)
+}
 
 @Serializable
 data class Booking(
