@@ -1,7 +1,8 @@
-package com.keith.modi.screens.auth
+package com.keith.modi.ui.screens.auth
 
 import com.keith.modi.models.AuthViewModel
 import com.keith.modi.models.AuthState
+import com.keith.modi.models.UserRole
 
 import androidx.compose.animation.*
 import androidx.compose.foundation.background
@@ -10,14 +11,12 @@ import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Apps
-import androidx.compose.material.icons.filled.ErrorOutline
-import androidx.compose.material.icons.filled.Visibility
-import androidx.compose.material.icons.filled.VisibilityOff
+import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
@@ -31,12 +30,16 @@ import androidx.lifecycle.viewmodel.compose.viewModel
 import com.keith.modi.ui.theme.ModiTheme
 
 @Composable
-fun LoginScreen(viewModel: AuthViewModel = viewModel()) {
+fun LoginScreen(
+    isSignUpInitial: Boolean = false,
+    viewModel: AuthViewModel = viewModel()
+) {
     var name by remember { mutableStateOf("") }
     var email by remember { mutableStateOf("") }
     var password by remember { mutableStateOf("") }
     var isPasswordVisible by remember { mutableStateOf(false) }
-    var isSignUp by remember { mutableStateOf(false) }
+    var isSignUp by remember { mutableStateOf(isSignUpInitial) }
+    var selectedRole by remember { mutableStateOf(UserRole.CUSTOMER) }
 
     val authState by viewModel.authState.collectAsState()
 
@@ -48,7 +51,6 @@ fun LoginScreen(viewModel: AuthViewModel = viewModel()) {
     ) {
         Spacer(modifier = Modifier.height(16.dp))
         
-        // Grid Icon (Top Left) - Matching Mockup
         IconButton(
             onClick = { /* Action */ },
             modifier = Modifier.size(48.dp)
@@ -68,52 +70,60 @@ fun LoginScreen(viewModel: AuthViewModel = viewModel()) {
             horizontalAlignment = Alignment.CenterHorizontally
         ) {
             Text(
-                text = "Welcome Back",
+                text = if (isSignUp) "Join Modi" else "Welcome Back",
                 style = MaterialTheme.typography.headlineLarge,
                 fontWeight = FontWeight.Bold,
-                color = MaterialTheme.colorScheme.onBackground,
-                fontFamily = FontFamily.SansSerif
+                color = MaterialTheme.colorScheme.onBackground
             )
             Text(
-                text = "Login to continue your journey",
+                text = if (isSignUp) "Choose your role and start your journey" else "Login to continue your journey",
                 style = MaterialTheme.typography.bodyMedium,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                 textAlign = TextAlign.Center
             )
             
-            Spacer(modifier = Modifier.height(48.dp))
+            Spacer(modifier = Modifier.height(32.dp))
 
             if (isSignUp) {
+                // PENDO: High-End Role Selection
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(12.dp)
+                ) {
+                    RoleCard(
+                        title = "Customer",
+                        icon = Icons.Default.Person,
+                        isSelected = selectedRole == UserRole.CUSTOMER,
+                        modifier = Modifier.weight(1f),
+                        onClick = { selectedRole = UserRole.CUSTOMER }
+                    )
+                    RoleCard(
+                        title = "Airbnb Host",
+                        icon = Icons.Default.Business,
+                        isSelected = selectedRole == UserRole.HOST,
+                        modifier = Modifier.weight(1f),
+                        onClick = { selectedRole = UserRole.HOST }
+                    )
+                }
+                Spacer(modifier = Modifier.height(24.dp))
+                
                 OutlinedTextField(
                     value = name,
                     onValueChange = { name = it },
                     placeholder = { Text("Full Name", color = MaterialTheme.colorScheme.onSurfaceVariant) },
                     modifier = Modifier.fillMaxWidth(),
                     shape = RoundedCornerShape(16.dp),
-                    colors = OutlinedTextFieldDefaults.colors(
-                        focusedBorderColor = MaterialTheme.colorScheme.primary,
-                        unfocusedBorderColor = MaterialTheme.colorScheme.outline,
-                        focusedTextColor = MaterialTheme.colorScheme.onSurface,
-                        unfocusedTextColor = MaterialTheme.colorScheme.onSurface
-                    ),
                     singleLine = true
                 )
                 Spacer(modifier = Modifier.height(16.dp))
             }
 
-            // Rounded Input Fields matching mockup
             OutlinedTextField(
                 value = email,
                 onValueChange = { email = it },
-                placeholder = { Text("Email or Phone", color = MaterialTheme.colorScheme.onSurfaceVariant) },
+                placeholder = { Text("Email", color = MaterialTheme.colorScheme.onSurfaceVariant) },
                 modifier = Modifier.fillMaxWidth(),
                 shape = RoundedCornerShape(16.dp),
-                colors = OutlinedTextFieldDefaults.colors(
-                    focusedBorderColor = MaterialTheme.colorScheme.primary,
-                    unfocusedBorderColor = MaterialTheme.colorScheme.outline,
-                    focusedTextColor = MaterialTheme.colorScheme.onSurface,
-                    unfocusedTextColor = MaterialTheme.colorScheme.onSurface
-                ),
                 singleLine = true
             )
 
@@ -135,40 +145,46 @@ fun LoginScreen(viewModel: AuthViewModel = viewModel()) {
                 modifier = Modifier.fillMaxWidth(),
                 shape = RoundedCornerShape(16.dp),
                 visualTransformation = if (isPasswordVisible) VisualTransformation.None else PasswordVisualTransformation(),
-                colors = OutlinedTextFieldDefaults.colors(
-                    focusedBorderColor = MaterialTheme.colorScheme.primary,
-                    unfocusedBorderColor = MaterialTheme.colorScheme.outline,
-                    focusedTextColor = MaterialTheme.colorScheme.onSurface,
-                    unfocusedTextColor = MaterialTheme.colorScheme.onSurface
-                ),
                 singleLine = true,
-                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password)
+                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password),
+                supportingText = {
+                    if (isSignUp && password.isNotEmpty()) {
+                        val validation = com.keith.modi.utils.ValidationUtils.validatePassword(password)
+                        if (validation is com.keith.modi.utils.ValidationUtils.ValidationResult.Error) {
+                            Text(
+                                text = validation.message,
+                                color = MaterialTheme.colorScheme.error,
+                                style = MaterialTheme.typography.labelSmall
+                            )
+                        } else {
+                            Text(
+                                text = "Strong Password ✨",
+                                color = Color(0xFF2E7D32),
+                                style = MaterialTheme.typography.labelSmall
+                            )
+                        }
+                    }
+                }
             )
 
             Spacer(modifier = Modifier.height(32.dp))
 
-            // Premium Orange Button
             Button(
                 onClick = {
                     if (isSignUp) {
-                        viewModel.signUp(email, password, name)
+                        viewModel.signUp(email, password, name, selectedRole)
                     } else {
                         viewModel.login(email, password)
                     }
                 },
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .height(56.dp),
+                modifier = Modifier.fillMaxWidth().height(56.dp),
                 shape = RoundedCornerShape(28.dp),
-                colors = ButtonDefaults.buttonColors(
-                    containerColor = MaterialTheme.colorScheme.primary
-                ),
                 enabled = authState !is AuthState.Loading
             ) {
                 if (authState is AuthState.Loading) {
                     CircularProgressIndicator(color = MaterialTheme.colorScheme.onPrimary, modifier = Modifier.size(24.dp))
                 } else {
-                    Text(if (isSignUp) "Sign Up" else "Login", fontSize = 18.sp, color = MaterialTheme.colorScheme.onPrimary, fontWeight = FontWeight.Bold)
+                    Text(if (isSignUp) "Register" else "Login", fontSize = 18.sp, fontWeight = FontWeight.Bold)
                 }
             }
 
@@ -187,36 +203,18 @@ fun LoginScreen(viewModel: AuthViewModel = viewModel()) {
 
         Spacer(modifier = Modifier.weight(1f))
         
-        // PENDO: Modern Error UI - Animated Banner
-        AnimatedVisibility(
-            visible = authState is AuthState.Error,
-            enter = fadeIn() + slideInVertically(),
-            exit = fadeOut() + slideOutVertically()
-        ) {
+        // PENDO: Secure Error Banner
+        AnimatedVisibility(visible = authState is AuthState.Error) {
             if (authState is AuthState.Error) {
                 Surface(
                     color = MaterialTheme.colorScheme.errorContainer,
                     shape = RoundedCornerShape(12.dp),
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(bottom = 16.dp)
+                    modifier = Modifier.fillMaxWidth().padding(bottom = 16.dp)
                 ) {
-                    Row(
-                        modifier = Modifier.padding(16.dp),
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.spacedBy(12.dp)
-                    ) {
-                        Icon(
-                            imageVector = Icons.Default.ErrorOutline,
-                            contentDescription = null,
-                            tint = MaterialTheme.colorScheme.error
-                        )
-                        Text(
-                            text = (authState as AuthState.Error).message,
-                            color = MaterialTheme.colorScheme.onErrorContainer,
-                            style = MaterialTheme.typography.bodyMedium,
-                            fontWeight = FontWeight.Medium
-                        )
+                    Row(modifier = Modifier.padding(16.dp), verticalAlignment = Alignment.CenterVertically) {
+                        Icon(Icons.Default.ErrorOutline, null, tint = MaterialTheme.colorScheme.error)
+                        Spacer(Modifier.width(12.dp))
+                        Text((authState as AuthState.Error).message, color = MaterialTheme.colorScheme.onErrorContainer)
                     }
                 }
             }
@@ -224,10 +222,28 @@ fun LoginScreen(viewModel: AuthViewModel = viewModel()) {
     }
 }
 
-@Preview(showSystemUi = true)
 @Composable
-private fun LoginScreenprev() {
-    ModiTheme {
-        LoginScreen()
+fun RoleCard(
+    title: String,
+    icon: androidx.compose.ui.graphics.vector.ImageVector,
+    isSelected: Boolean,
+    modifier: Modifier = Modifier,
+    onClick: () -> Unit
+) {
+    Surface(
+        modifier = modifier.height(100.dp).clickable { onClick() },
+        shape = RoundedCornerShape(16.dp),
+        color = if (isSelected) MaterialTheme.colorScheme.primaryContainer else MaterialTheme.colorScheme.surfaceVariant,
+        border = if (isSelected) androidx.compose.foundation.BorderStroke(2.dp, MaterialTheme.colorScheme.primary) else null
+    ) {
+        Column(
+            horizontalAlignment = Alignment.CenterHorizontally,
+            verticalArrangement = Arrangement.Center,
+            modifier = Modifier.padding(8.dp)
+        ) {
+            Icon(icon, null, tint = if (isSelected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant)
+            Spacer(Modifier.height(8.dp))
+            Text(title, fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Medium, textAlign = TextAlign.Center, fontSize = 14.sp)
+        }
     }
 }

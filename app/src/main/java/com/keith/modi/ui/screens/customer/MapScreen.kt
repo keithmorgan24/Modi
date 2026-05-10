@@ -1,4 +1,4 @@
-package com.keith.modi.screens.customer
+package com.keith.modi.ui.screens.customer
 
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding

@@ -8,83 +8,68 @@ import androidx.compose.material.icons.automirrored.filled.List
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
-import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.vector.ImageVector
-import androidx.lifecycle.viewmodel.compose.viewModel
-import com.keith.modi.Supabase
-import com.keith.modi.models.AuthState
+import androidx.compose.ui.unit.dp
 import com.keith.modi.models.AuthViewModel
 import com.keith.modi.models.MainViewModel
 import com.keith.modi.models.UserRole
-import com.keith.modi.screens.auth.LoginScreen
-import com.keith.modi.screens.common.KycScreen
-import com.keith.modi.screens.common.ProfileScreen
-import com.keith.modi.screens.customer.ExploreScreen
-import com.keith.modi.screens.customer.LikedScreen
-import com.keith.modi.screens.customer.TripsScreen
-import com.keith.modi.screens.host.HostDashboardScreen
-import com.keith.modi.screens.host.MyPropertiesScreen
-import io.github.jan.supabase.auth.auth
+import com.keith.modi.ui.screens.common.ProfileScreen
+import com.keith.modi.ui.screens.customer.ExploreScreen
+import com.keith.modi.ui.screens.customer.LikedScreen
+import com.keith.modi.ui.screens.customer.TripsScreen
+import com.keith.modi.ui.screens.host.HostDashboardScreen
+import com.keith.modi.ui.screens.host.MyPropertiesScreen
 import kotlinx.coroutines.launch
 
-sealed class Screen(val route: String, val title: String, val icon: ImageVector) {
-    // Customer Screens
-    object Explore : Screen("explore", "Explore", Icons.Default.Search)
-    object Liked : Screen("liked", "Liked", Icons.Default.Favorite)
-    object Trips : Screen("trips", "Trips", Icons.Default.History)
-    
-    // Host Screens
-    object Dashboard : Screen("dashboard", "Dashboard", Icons.Default.Dashboard)
-    object MyAirbnbs : Screen("my_airbnbs", "My Airbnbs", Icons.AutoMirrored.Filled.List)
-    
-    // Common
-    object Profile : Screen("profile", "Profile", Icons.Default.AccountCircle)
-    object KYC : Screen("kyc", "KYC", Icons.Default.VerifiedUser)
+sealed class Screen(val title: String, val icon: ImageVector) {
+    object Explore : Screen("Explore", Icons.Default.Search)
+    object Liked : Screen("Liked", Icons.Default.Favorite)
+    object Trips : Screen("Trips", Icons.Default.History)
+    object Dashboard : Screen("Dashboard", Icons.Default.Dashboard)
+    object MyAirbnbs : Screen("My Airbnbs", Icons.AutoMirrored.Filled.List)
+    object Profile : Screen("Profile", Icons.Default.AccountCircle)
 }
 
 @Composable
-fun ModiAppNavigation(mainViewModel: MainViewModel = viewModel()) {
-    val authViewModel: AuthViewModel = viewModel()
-    val authState by authViewModel.authState.collectAsState()
-    
-    // Check for existing session
-    var sessionChecked by remember { mutableStateOf(false) }
-    LaunchedEffect(Unit) {
-        val session = Supabase.client.auth.currentSessionOrNull()
-        if (session != null) {
-            authViewModel.setLoggedIn()
-        }
-        sessionChecked = true
-    }
-
-    if (!sessionChecked) {
-        // Show Splash or Loading
-        Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-            CircularProgressIndicator()
-        }
-        return
-    }
-
-    if (authState !is AuthState.Success) {
-        LoginScreen(authViewModel)
-    } else {
-        MainScaffold(mainViewModel)
-    }
-}
-
-@Composable
-fun MainScaffold(mainViewModel: MainViewModel) {
+fun MainScaffold(
+    mainViewModel: MainViewModel,
+    authViewModel: AuthViewModel,
+    onNavigate: (String) -> Unit
+) {
     val currentRole by mainViewModel.currentRole.collectAsState()
+    val isGuest by mainViewModel.isGuest.collectAsState()
     
     val customerItems = listOf(Screen.Explore, Screen.Liked, Screen.Trips, Screen.Profile)
     val hostItems = listOf(Screen.Dashboard, Screen.MyAirbnbs, Screen.Profile)
     
-    val items = if (currentRole == UserRole.CUSTOMER) customerItems else hostItems
-    val pagerState = rememberPagerState(pageCount = { items.size })
+    val items = when {
+        isGuest -> listOf(Screen.Explore, Screen.Profile)
+        currentRole == UserRole.HOST -> hostItems
+        else -> customerItems
+    }
+    
+    val pagerState = rememberPagerState { items.size }
     val scope = rememberCoroutineScope()
+    val isOnline by mainViewModel.isOnline.collectAsState()
 
     Scaffold(
+        topBar = {
+            if (!isOnline) {
+                Surface(
+                    color = MaterialTheme.colorScheme.errorContainer,
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    Text(
+                        text = "Working Offline 📶",
+                        modifier = Modifier.padding(vertical = 4.dp),
+                        textAlign = androidx.compose.ui.text.style.TextAlign.Center,
+                        style = MaterialTheme.typography.labelSmall,
+                        color = MaterialTheme.colorScheme.onErrorContainer
+                    )
+                }
+            }
+        },
         bottomBar = {
             NavigationBar {
                 items.forEachIndexed { index, screen ->
@@ -106,7 +91,7 @@ fun MainScaffold(mainViewModel: MainViewModel) {
             state = pagerState,
             modifier = Modifier.padding(innerPadding),
             beyondViewportPageCount = 1,
-            userScrollEnabled = true // This enables the swiping feature you requested
+            userScrollEnabled = true 
         ) { page ->
             when (items[page]) {
                 is Screen.Explore -> ExploreScreen()
@@ -116,25 +101,9 @@ fun MainScaffold(mainViewModel: MainViewModel) {
                 is Screen.MyAirbnbs -> MyPropertiesScreen()
                 is Screen.Profile -> ProfileScreen(
                     mainViewModel = mainViewModel,
-                    onNavigateToKyc = {
-                        scope.launch {
-                            // Find index of KYC screen
-                            val kycIndex = items.indexOfFirst { it is Screen.KYC }
-                            if (kycIndex != -1) {
-                                pagerState.animateScrollToPage(kycIndex)
-                            } else {
-                                // If KYC is not in bottom bar, we might need a different way or add it
-                                // For now, let's assume it's accessible or handle it.
-                                // Actually, KYC is not in customerItems/hostItems.
-                            }
-                        }
-                    }
+                    authViewModel = authViewModel,
+                    onNavigate = onNavigate
                 )
-                is Screen.KYC -> KycScreen(onVerificationComplete = {
-                    scope.launch {
-                        pagerState.animateScrollToPage(0)
-                    }
-                })
             }
         }
     }

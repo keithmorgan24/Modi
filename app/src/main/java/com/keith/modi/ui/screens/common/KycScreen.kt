@@ -1,4 +1,4 @@
-package com.keith.modi.screens.common
+package com.keith.modi.ui.screens.common
 
 import android.net.Uri
 import androidx.activity.compose.rememberLauncherForActivityResult

@@ -8,8 +8,7 @@ import io.github.jan.supabase.auth.auth
 import io.github.jan.supabase.postgrest.postgrest
 import io.github.jan.supabase.postgrest.query.Columns
 import io.github.jan.supabase.realtime.*
-import io.github.jan.supabase.functions.functions
-import io.ktor.client.statement.bodyAsText
+import io.ktor.client.statement.*
 import kotlinx.serialization.json.*
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.async
@@ -138,8 +137,6 @@ class PropertyViewModel : ViewModel() {
         }
     }
 
-    private var lockTimerJob: Job? = null
-
     fun createPendingBooking(property: Property) {
         val propertyId = property.id ?: return
         viewModelScope.launch {
@@ -148,15 +145,19 @@ class PropertyViewModel : ViewModel() {
             if (currentState is PropertyState.Success) {
                 _propertyState.value = currentState.copy(isBookingLoading = true, bookingError = null)
                 try {
-                    val expiryTime = System.currentTimeMillis() + (5 * 60 * 1000)
                     val bookingId = UUID.randomUUID().toString()
-                    val newBooking = Booking(bookingId, propertyId, userId, "PENDING", expiryTime.toString(), property.price * 0.1)
+                    val newBooking = Booking(
+                        id = bookingId,
+                        propertyId = propertyId,
+                        guestId = userId,
+                        status = "PENDING",
+                        expiresAt = (System.currentTimeMillis() + 3600000).toString(),
+                        feePaid = 0.0
+                    )
                     Supabase.client.postgrest["bookings"].insert(newBooking)
                     _propertyState.value = currentState.copy(activeBooking = newBooking, isBookingLoading = false)
-                    lockTimerJob?.cancel()
-                    lockTimerJob = launch { delay(300_000); cancelBooking(bookingId) }
                 } catch (e: Exception) {
-                    _propertyState.value = currentState.copy(isBookingLoading = false, bookingError = "Unable to lock room.")
+                    _propertyState.value = currentState.copy(isBookingLoading = false, bookingError = "Unable to start booking flow.")
                 }
             }
         }
@@ -167,9 +168,8 @@ class PropertyViewModel : ViewModel() {
             val currentState = _propertyState.value
             if (currentState is PropertyState.Success) {
                 try {
-                    Supabase.client.postgrest["bookings"].update({ set("status", "CANCELLED") }) { filter { eq("id", bookingId) } }
+                    Supabase.client.postgrest["bookings"].delete { filter { eq("id", bookingId) } }
                     _propertyState.value = currentState.copy(activeBooking = null)
-                    lockTimerJob?.cancel()
                 } catch (e: Exception) {}
             }
         }
@@ -181,40 +181,8 @@ class PropertyViewModel : ViewModel() {
             if (currentState is PropertyState.Success) {
                 try {
                     Supabase.client.postgrest["bookings"].update({ set("status", "CONFIRMED") }) { filter { eq("id", bookingId) } }
-                    val updatedBookings = currentState.userBookings.map { if (it.id == bookingId) it.copy(status = "CONFIRMED") else it }
-                    _propertyState.value = currentState.copy(activeBooking = null, userBookings = updatedBookings)
-                    lockTimerJob?.cancel()
+                    fetchProperties() // Refresh all data
                 } catch (e: Exception) {}
-            }
-        }
-    }
-
-    fun payWithMpesa(phoneNumber: String, amount: Double, bookingId: String, onTriggered: (Boolean, String) -> Unit) {
-        viewModelScope.launch {
-            try {
-                val body = buildJsonObject {
-                    put("phone", phoneNumber)
-                    put("amount", amount.toInt())
-                    put("booking_id", bookingId)
-                }
-                
-                // PENDO: Robust STK Push trigger with explicit status handling
-                val response = Supabase.client.functions.invoke("mpesa-stk-push", body)
-                val responseText = response.bodyAsText()
-                
-                if (response.status.value >= 400) {
-                    onTriggered(false, "Server Error (${response.status.value}). Ensure functions are deployed.")
-                } else {
-                    val json = Json.parseToJsonElement(responseText).jsonObject
-                    if (json["ResponseCode"]?.jsonPrimitive?.content == "0") {
-                        onTriggered(true, "Prompt Sent! Check your phone 📲")
-                    } else {
-                        val error = json["CustomerMessage"]?.jsonPrimitive?.content ?: "Safaricom rejected request"
-                        onTriggered(false, error)
-                    }
-                }
-            } catch (e: Exception) {
-                onTriggered(false, ErrorUtils.sanitizeError(e))
             }
         }
     }

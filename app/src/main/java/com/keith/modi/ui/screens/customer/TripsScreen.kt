@@ -1,4 +1,4 @@
-package com.keith.modi.screens.customer
+package com.keith.modi.ui.screens.customer
 
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.PickVisualMediaRequest

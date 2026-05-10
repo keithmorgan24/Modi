@@ -1,4 +1,4 @@
-package com.keith.modi.screens.customer
+package com.keith.modi.ui.screens.customer
 
 import androidx.compose.animation.animateColorAsState
 import androidx.compose.animation.core.*
@@ -29,7 +29,6 @@ import com.keith.modi.models.Property
 import com.keith.modi.models.PropertyState
 import com.keith.modi.models.PropertyViewModel
 import com.keith.modi.models.Review
-import com.keith.modi.screens.customer.MpesaPaymentDialog
 import com.keith.modi.ui.theme.ModiTheme
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
@@ -165,7 +164,6 @@ fun ExploreScreen(viewModel: PropertyViewModel = viewModel()) {
                     viewModel = viewModel,
                     onClose = { 
                         showBookingSheet = false 
-                        successState?.activeBooking?.id?.let { viewModel.cancelBooking(it) }
                     }
                 )
             }
@@ -186,35 +184,8 @@ fun BookingSheetContent(
     val isBookingLoading = successState?.isBookingLoading ?: false
     val bookingError = successState?.bookingError
     
-    var timeLeft by remember { mutableIntStateOf(300) }
-    var showMpesaPrompt by remember { mutableStateOf(false) }
-    var paymentErrorMessage by remember { mutableStateOf<String?>(null) }
-
-    LaunchedEffect(Unit) {
-        while (timeLeft > 0) { delay(1000); timeLeft-- }
-    }
-
-    if (showMpesaPrompt && activeBooking != null) {
-        MpesaPaymentDialog(
-            amount = property.price * 0.1,
-            errorMessage = paymentErrorMessage,
-            onPayClicked = { phone ->
-                viewModel.payWithMpesa(phone, property.price * 0.1, activeBooking.id!!) { success, message ->
-                    if (!success) { paymentErrorMessage = message } 
-                    else { showMpesaPrompt = false }
-                }
-            },
-            onCancel = { showMpesaPrompt = false; paymentErrorMessage = null }
-        )
-    }
-
-    Column(modifier = Modifier.fillMaxHeight(0.9f).padding(24.dp).verticalScroll(rememberScrollState()).navigationBarsPadding()) {
-        Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
-            Text("Review Booking", style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.Bold)
-            Surface(color = MaterialTheme.colorScheme.errorContainer, shape = RoundedCornerShape(8.dp)) {
-                Text(String.format("%02d:%02d", timeLeft / 60, timeLeft % 60), modifier = Modifier.padding(8.dp), color = MaterialTheme.colorScheme.error, fontWeight = FontWeight.Bold)
-            }
-        }
+    Column(modifier = Modifier.fillMaxHeight(0.8f).padding(24.dp).verticalScroll(rememberScrollState()).navigationBarsPadding()) {
+        Text("Confirm Your Stay", style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.Bold)
         
         Spacer(Modifier.height(24.dp))
         Text(property.title, style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
@@ -222,23 +193,19 @@ fun BookingSheetContent(
 
         Spacer(Modifier.height(16.dp))
         Text("About this space", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
-        Text(property.description ?: "A serene Modi space.", style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+        Text(property.description ?: "Experience the best of Modi living in this high-end, secure space.", style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
 
         Spacer(Modifier.height(24.dp))
         Card(modifier = Modifier.fillMaxWidth(), colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f))) {
             Column(Modifier.padding(16.dp)) {
                 Row(Modifier.fillMaxWidth(), Arrangement.SpaceBetween) { 
-                    Text("Stay Price")
+                    Text("Price per night")
                     Text("Ksh ${property.price}", fontWeight = FontWeight.Bold) 
-                }
-                Row(Modifier.fillMaxWidth(), Arrangement.SpaceBetween) { 
-                    Text("Modi Fee (10%)")
-                    Text("Ksh ${property.price * 0.1}", fontWeight = FontWeight.Bold) 
                 }
                 HorizontalDivider(Modifier.padding(vertical = 12.dp))
                 Row(Modifier.fillMaxWidth(), Arrangement.SpaceBetween) { 
-                    Text("Total Deposit", fontWeight = FontWeight.ExtraBold)
-                    Text("Ksh ${property.price * 0.1}", fontWeight = FontWeight.ExtraBold, color = MaterialTheme.colorScheme.primary, fontSize = 18.sp) 
+                    Text("Total Estimate", fontWeight = FontWeight.ExtraBold)
+                    Text("Ksh ${property.price}", fontWeight = FontWeight.ExtraBold, color = MaterialTheme.colorScheme.primary, fontSize = 18.sp) 
                 }
             }
         }
@@ -249,21 +216,42 @@ fun BookingSheetContent(
 
         Spacer(Modifier.height(32.dp))
         Text("Guest Reviews (${reviews.size})", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
-        reviews.take(3).forEach { review ->
-            Text("Guest: ${review.comment}", style = MaterialTheme.typography.bodySmall, modifier = Modifier.padding(top = 8.dp))
+        if (reviews.isEmpty()) {
+            Text("No reviews yet. Be the first to experience this masterpiece! ✨", color = MaterialTheme.colorScheme.secondary, modifier = Modifier.padding(vertical = 12.dp))
+        } else {
+            Column(verticalArrangement = Arrangement.spacedBy(16.dp), modifier = Modifier.padding(vertical = 12.dp)) {
+                reviews.take(3).forEach { review ->
+                    Column {
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Icon(Icons.Default.AccountCircle, null, modifier = Modifier.size(32.dp), tint = MaterialTheme.colorScheme.outline)
+                            Spacer(Modifier.width(12.dp))
+                            Text("Guest", fontWeight = FontWeight.Bold)
+                        }
+                        Text(review.comment, style = MaterialTheme.typography.bodySmall, modifier = Modifier.padding(top = 8.dp))
+                    }
+                }
+            }
         }
 
-        Spacer(Modifier.height(40.dp))
+        Spacer(modifier = Modifier.weight(1f))
+        
         Button(
-            onClick = { if (activeBooking != null) showMpesaPrompt = true else viewModel.createPendingBooking(property) },
+            onClick = { 
+                if (activeBooking != null) {
+                    viewModel.confirmBooking(activeBooking.id!!)
+                    onClose()
+                } else {
+                    viewModel.createPendingBooking(property)
+                }
+            },
             modifier = Modifier.fillMaxWidth().height(56.dp),
             shape = RoundedCornerShape(16.dp),
             enabled = !isBookingLoading
         ) {
             if (isBookingLoading) CircularProgressIndicator(modifier = Modifier.size(24.dp), color = Color.White)
-            else Text(if (activeBooking == null) "Secure My Room 🔒" else "Pay Booking Fee 💰", fontWeight = FontWeight.Bold)
+            else Text(if (activeBooking == null) "Secure My Room 🔒" else "Confirm Booking 🚀", fontWeight = FontWeight.Bold)
         }
-        TextButton(onClick = onClose, modifier = Modifier.fillMaxWidth()) { Text("Cancel", color = MaterialTheme.colorScheme.secondary) }
+        TextButton(onClick = onClose, modifier = Modifier.fillMaxWidth()) { Text("Go Back", color = MaterialTheme.colorScheme.secondary) }
     }
 }
 

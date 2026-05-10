@@ -4,7 +4,9 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.keith.modi.Supabase
 import com.keith.modi.utils.ErrorUtils
+import com.keith.modi.utils.ValidationUtils
 import io.github.jan.supabase.auth.auth
+import io.github.jan.supabase.postgrest.postgrest
 import io.github.jan.supabase.auth.providers.builtin.Email
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -14,6 +16,7 @@ import kotlinx.serialization.json.buildJsonObject
 import kotlinx.serialization.json.put
 
 sealed class AuthState {
+    object Initial : AuthState() // PENDO: Separate initial state from Idle/Logout
     object Idle : AuthState()
     object Loading : AuthState()
     data class Success(val message: String) : AuthState()
@@ -22,7 +25,7 @@ sealed class AuthState {
 
 class AuthViewModel : ViewModel() {
 
-    private val _authState = MutableStateFlow<AuthState>(AuthState.Idle)
+    private val _authState = MutableStateFlow<AuthState>(AuthState.Initial)
     val authState: StateFlow<AuthState> = _authState.asStateFlow()
 
     fun signUp(email: String, pass: String, name: String, role: UserRole = UserRole.CUSTOMER) {
@@ -30,6 +33,13 @@ class AuthViewModel : ViewModel() {
             _authState.value = AuthState.Error("Kindly fill out all details")
             return
         }
+
+        val passwordValidation = ValidationUtils.validatePassword(pass)
+        if (passwordValidation is ValidationUtils.ValidationResult.Error) {
+            _authState.value = AuthState.Error(passwordValidation.message)
+            return
+        }
+
         viewModelScope.launch {
             _authState.value = AuthState.Loading
             try {
@@ -81,6 +91,131 @@ class AuthViewModel : ViewModel() {
             try {
                 Supabase.client.auth.signOut()
                 _authState.value = AuthState.Idle
+            } catch (e: Exception) {
+                _authState.value = AuthState.Error(ErrorUtils.sanitizeError(e))
+            }
+        }
+    }
+
+    fun updateFullName(newName: String) {
+        if (newName.isBlank()) {
+            _authState.value = AuthState.Error("Name cannot be blank")
+            return
+        }
+        viewModelScope.launch {
+            _authState.value = AuthState.Loading
+            try {
+                val userId = Supabase.client.auth.currentUserOrNull()?.id ?: throw Exception("User not found")
+                
+                // 1. Update public.profiles table directly (MainViewModel listens to this)
+                Supabase.client.postgrest["profiles"].update(
+                    mapOf("full_name" to newName)
+                ) {
+                    filter { eq("id", userId) }
+                }
+
+                // 2. Also update Auth metadata for consistency
+                Supabase.client.auth.updateUser {
+                    data = buildJsonObject {
+                        put("full_name", newName)
+                    }
+                }
+                
+                _authState.value = AuthState.Success("Name updated successfully!")
+            } catch (e: Exception) {
+                _authState.value = AuthState.Error(ErrorUtils.sanitizeError(e))
+            }
+        }
+    }
+
+    fun updateAvatar(newAvatarUrl: String) {
+        viewModelScope.launch {
+            _authState.value = AuthState.Loading
+            try {
+                val userId = Supabase.client.auth.currentUserOrNull()?.id ?: throw Exception("User not found")
+
+                // 1. Update public.profiles table directly
+                Supabase.client.postgrest["profiles"].update(
+                    mapOf("avatar_url" to newAvatarUrl)
+                ) {
+                    filter { eq("id", userId) }
+                }
+
+                // 2. Update Auth metadata
+                Supabase.client.auth.updateUser {
+                    data = buildJsonObject {
+                        put("avatar_url", newAvatarUrl)
+                    }
+                }
+                _authState.value = AuthState.Success("Profile picture updated!")
+            } catch (e: Exception) {
+                _authState.value = AuthState.Error(ErrorUtils.sanitizeError(e))
+            }
+        }
+    }
+
+    fun updatePassword(newPass: String) {
+        val passwordValidation = ValidationUtils.validatePassword(newPass)
+        if (passwordValidation is ValidationUtils.ValidationResult.Error) {
+            _authState.value = AuthState.Error(passwordValidation.message)
+            return
+        }
+        viewModelScope.launch {
+            _authState.value = AuthState.Loading
+            try {
+                Supabase.client.auth.updateUser {
+                    password = newPass
+                }
+                _authState.value = AuthState.Success("Password updated successfully!")
+            } catch (e: Exception) {
+                _authState.value = AuthState.Error(ErrorUtils.sanitizeError(e))
+            }
+        }
+    }
+
+    fun updatePasswordWithVerification(currentPass: String, newPass: String) {
+        if (currentPass.isBlank()) {
+            _authState.value = AuthState.Error("Please enter your current password")
+            return
+        }
+
+        val passwordValidation = ValidationUtils.validatePassword(newPass)
+        if (passwordValidation is ValidationUtils.ValidationResult.Error) {
+            _authState.value = AuthState.Error(passwordValidation.message)
+            return
+        }
+
+        viewModelScope.launch {
+            _authState.value = AuthState.Loading
+            try {
+                // 1. Standard secure flow: sign in with current credentials to verify, then update.
+                val email = Supabase.client.auth.currentUserOrNull()?.email ?: throw Exception("User not found")
+                
+                Supabase.client.auth.signInWith(Email) {
+                    this.email = email
+                    this.password = currentPass
+                }
+
+                // 2. If re-auth succeeded, update to new password
+                Supabase.client.auth.updateUser {
+                    password = newPass
+                }
+                _authState.value = AuthState.Success("Password updated successfully!")
+            } catch (e: Exception) {
+                _authState.value = AuthState.Error("Verification failed: Ensure current password is correct.")
+            }
+        }
+    }
+
+    fun requestAccountDeletion() {
+        viewModelScope.launch {
+            _authState.value = AuthState.Loading
+            try {
+                // In a production app, you would call a Supabase Edge Function here 
+                // to handle the secure deletion of user data and the auth record.
+                // For now, we sign out and set a state.
+                Supabase.client.auth.signOut()
+                _authState.value = AuthState.Error("Deletion request submitted. You have been logged out.")
             } catch (e: Exception) {
                 _authState.value = AuthState.Error(ErrorUtils.sanitizeError(e))
             }

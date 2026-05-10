@@ -1,4 +1,4 @@
-// PENDO: High-Resilience M-Pesa Integration (v2.0)
+// PENDO: Ultra-Resilient M-Pesa Integration (Diagnostic v3.5)
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts"
 
 const corsHeaders = {
@@ -9,45 +9,49 @@ const corsHeaders = {
 serve(async (req) => {
   if (req.method === 'OPTIONS') return new Response('ok', { headers: corsHeaders })
 
+  const projRef = Deno.env.get('MODI_PROJECT_REF') || "beztonodgfvlrxzyxkxb"
+
   try {
     const { phone, amount, booking_id } = await req.json()
 
-    // 1. Validate Secrets
-    const consumerKey = Deno.env.get('MPESA_CONSUMER_KEY')
-    const consumerSecret = Deno.env.get('MPESA_CONSUMER_SECRET')
-    const shortCode = Deno.env.get('MPESA_SHORTCODE')
-    const passkey = Deno.env.get('MPESA_PASSKEY')
+    // 1. Precise Secret Retrieval
+    const consumerKey = Deno.env.get('MPESA_CONSUMER_KEY')?.trim()
+    const consumerSecret = Deno.env.get('MPESA_CONSUMER_SECRET')?.trim()
+    const shortCode = Deno.env.get('MPESA_SHORTCODE')?.trim()
+    const passkey = Deno.env.get('MPESA_PASSKEY')?.trim()
 
-    if (!consumerKey || !consumerSecret) {
-        throw new Error("Safaricom Keys are missing in Supabase Secrets!")
-    }
+    if (!consumerKey || !consumerSecret) throw new Error("Safaricom Secrets (Keys) are missing.")
 
     let formattedPhone = phone.replace(/\D/g, '')
     if (formattedPhone.startsWith('0')) formattedPhone = '254' + formattedPhone.substring(1)
 
-    // 2. Get OAuth Token
+    // 2. Safaricom OAuth Token (Minimalist Handshake)
     const auth = btoa(`${consumerKey}:${consumerSecret}`)
-    const tokenRes = await fetch("https://sandbox.safaricom.co.ke/oauth/v1/generate?grant_type=client_credentials", {
-      headers: { Authorization: `Basic ${auth}` }
+    const url = "https://sandbox.safaricom.co.ke/oauth/v1/generate?grant_type=client_credentials"
+
+    console.log(`[PENDO] Authenticating with Safaricom...`)
+
+    const tokenRes = await fetch(url, {
+      method: "GET",
+      headers: { "Authorization": `Basic ${auth}` }
     })
 
-    const tokenData = await tokenRes.json()
+    const tokenBody = await tokenRes.text()
     if (!tokenRes.ok) {
-        throw new Error(`Safaricom Auth Failed: ${tokenData.errorMessage || tokenRes.statusText}`)
+        console.error(`[Safaricom Auth Failed] Status: ${tokenRes.status}, Body: ${tokenBody}`)
+        throw new Error(`Safaricom Auth Failed (HTTP ${tokenRes.status}). Ensure M-Pesa Express is added to your app on Daraja.`)
     }
 
-    const access_token = tokenData.access_token
+    const { access_token } = JSON.parse(tokenBody)
 
     // 3. Trigger STK Push
     const timestamp = new Date().toISOString().replace(/[^0-9]/g, '').slice(0, 14)
     const password = btoa(`${shortCode}${passkey}${timestamp}`)
 
-    console.log(`[PENDO] Sending STK Push to ${formattedPhone}`)
-
     const stkRes = await fetch("https://sandbox.safaricom.co.ke/mpesa/stkpush/v1/processrequest", {
       method: "POST",
       headers: {
-          Authorization: `Bearer ${access_token}`,
+          "Authorization": `Bearer ${access_token}`,
           "Content-Type": "application/json"
       },
       body: JSON.stringify({
@@ -55,20 +59,20 @@ serve(async (req) => {
         Password: password,
         Timestamp: timestamp,
         TransactionType: "CustomerPayBillOnline",
-        Amount: Math.max(1, Math.round(amount)),
+        Amount: Math.round(amount),
         PartyA: formattedPhone,
         PartyB: shortCode,
         PhoneNumber: formattedPhone,
-        CallBackURL: `https://${Deno.env.get('MODI_PROJECT_REF')}.supabase.co/functions/v1/mpesa-callback?booking_id=${booking_id}`,
+        CallBackURL: `https://${projRef}.supabase.co/functions/v1/mpesa-callback?booking_id=${booking_id}`,
         AccountReference: "ModiBooking",
-        TransactionDesc: "Payment for Modi Stay"
+        TransactionDesc: "Stay Deposit"
       })
     })
 
-    const result = await stkRes.json()
-    console.log("[Safaricom STK Response]:", JSON.stringify(result))
+    const result = await stkRes.text()
+    console.log("[STK Result]:", result)
 
-    return new Response(JSON.stringify(result), {
+    return new Response(result, {
       headers: { ...corsHeaders, 'Content-Type': 'application/json' },
       status: stkRes.ok ? 200 : 400,
     })

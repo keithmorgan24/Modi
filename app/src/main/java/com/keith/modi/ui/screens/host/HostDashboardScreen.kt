@@ -1,4 +1,4 @@
-package com.keith.modi.screens.host
+package com.keith.modi.ui.screens.host
 
 import androidx.compose.foundation.layout.*
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
