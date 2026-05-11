@@ -32,6 +32,18 @@ object ValidationUtils {
         return ValidationResult.Success
     }
 
+    /**
+     * PENDO: Modern Email Regex Validation
+     */
+    fun validateEmail(email: String): ValidationResult {
+        val emailRegex = "^[A-Za-z0-9+_.-]+@[A-Za-z0-9.-]+\\.[A-Za-z]{2,}$".toRegex()
+        return if (email.matches(emailRegex)) {
+            ValidationResult.Success
+        } else {
+            ValidationResult.Error("Enter a valid email address")
+        }
+    }
+
     sealed class ValidationResult {
         object Success : ValidationResult()
         data class Error(val message: String) : ValidationResult()

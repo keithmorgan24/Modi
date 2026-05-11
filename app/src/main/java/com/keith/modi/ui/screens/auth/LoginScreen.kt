@@ -8,9 +8,11 @@ import androidx.compose.animation.*
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
@@ -39,6 +41,7 @@ fun LoginScreen(
     var password by remember { mutableStateOf("") }
     var isPasswordVisible by remember { mutableStateOf(false) }
     var isSignUp by remember { mutableStateOf(isSignUpInitial) }
+    var isForgotPassword by remember { mutableStateOf(false) }
     var selectedRole by remember { mutableStateOf(UserRole.CUSTOMER) }
 
     val authState by viewModel.authState.collectAsState()
@@ -52,15 +55,27 @@ fun LoginScreen(
         Spacer(modifier = Modifier.height(16.dp))
         
         IconButton(
-            onClick = { /* Action */ },
-            modifier = Modifier.size(48.dp)
+            onClick = { 
+                if (isForgotPassword) isForgotPassword = false 
+                else if (isSignUp) isSignUp = false
+            },
+            modifier = Modifier.size(48.dp),
+            enabled = isSignUp || isForgotPassword
         ) {
-            Icon(
-                Icons.Default.Apps,
-                contentDescription = null,
-                tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                modifier = Modifier.size(32.dp)
-            )
+            if (isSignUp || isForgotPassword) {
+                Icon(
+                    Icons.AutoMirrored.Filled.ArrowBack,
+                    contentDescription = "Back",
+                    tint = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+            } else {
+                Icon(
+                    Icons.Default.Apps,
+                    contentDescription = null,
+                    tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier.size(32.dp)
+                )
+            }
         }
 
         Spacer(modifier = Modifier.weight(1f))
@@ -70,13 +85,21 @@ fun LoginScreen(
             horizontalAlignment = Alignment.CenterHorizontally
         ) {
             Text(
-                text = if (isSignUp) "Join Modi" else "Welcome Back",
+                text = when {
+                    isForgotPassword -> "Reset Password"
+                    isSignUp -> "Join Modi"
+                    else -> "Welcome Back"
+                },
                 style = MaterialTheme.typography.headlineLarge,
                 fontWeight = FontWeight.Bold,
                 color = MaterialTheme.colorScheme.onBackground
             )
             Text(
-                text = if (isSignUp) "Choose your role and start your journey" else "Login to continue your journey",
+                text = when {
+                    isForgotPassword -> "Enter your email to receive a recovery link"
+                    isSignUp -> "Choose your role and start your journey"
+                    else -> "Login to continue your journey"
+                },
                 style = MaterialTheme.typography.bodyMedium,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                 textAlign = TextAlign.Center
@@ -84,7 +107,7 @@ fun LoginScreen(
             
             Spacer(modifier = Modifier.height(32.dp))
 
-            if (isSignUp) {
+            if (isSignUp && !isForgotPassword) {
                 // PENDO: High-End Role Selection
                 Row(
                     modifier = Modifier.fillMaxWidth(),
@@ -127,54 +150,70 @@ fun LoginScreen(
                 singleLine = true
             )
 
-            Spacer(modifier = Modifier.height(16.dp))
+            if (!isForgotPassword) {
+                Spacer(modifier = Modifier.height(16.dp))
 
-            OutlinedTextField(
-                value = password,
-                onValueChange = { password = it },
-                placeholder = { Text("Password", color = MaterialTheme.colorScheme.onSurfaceVariant) },
-                trailingIcon = {
-                    IconButton(onClick = { isPasswordVisible = !isPasswordVisible }) {
-                        Icon(
-                            imageVector = if (isPasswordVisible) Icons.Default.Visibility else Icons.Default.VisibilityOff,
-                            contentDescription = null,
-                            tint = MaterialTheme.colorScheme.onSurfaceVariant
-                        )
-                    }
-                },
-                modifier = Modifier.fillMaxWidth(),
-                shape = RoundedCornerShape(16.dp),
-                visualTransformation = if (isPasswordVisible) VisualTransformation.None else PasswordVisualTransformation(),
-                singleLine = true,
-                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password),
-                supportingText = {
-                    if (isSignUp && password.isNotEmpty()) {
-                        val validation = com.keith.modi.utils.ValidationUtils.validatePassword(password)
-                        if (validation is com.keith.modi.utils.ValidationUtils.ValidationResult.Error) {
-                            Text(
-                                text = validation.message,
-                                color = MaterialTheme.colorScheme.error,
-                                style = MaterialTheme.typography.labelSmall
-                            )
-                        } else {
-                            Text(
-                                text = "Strong Password ✨",
-                                color = Color(0xFF2E7D32),
-                                style = MaterialTheme.typography.labelSmall
+                OutlinedTextField(
+                    value = password,
+                    onValueChange = { password = it },
+                    placeholder = { Text("Password", color = MaterialTheme.colorScheme.onSurfaceVariant) },
+                    trailingIcon = {
+                        IconButton(onClick = { isPasswordVisible = !isPasswordVisible }) {
+                            Icon(
+                                imageVector = if (isPasswordVisible) Icons.Default.Visibility else Icons.Default.VisibilityOff,
+                                contentDescription = null,
+                                tint = MaterialTheme.colorScheme.onSurfaceVariant
                             )
                         }
+                    },
+                    modifier = Modifier.fillMaxWidth(),
+                    shape = RoundedCornerShape(16.dp),
+                    visualTransformation = if (isPasswordVisible) VisualTransformation.None else PasswordVisualTransformation(),
+                    singleLine = true,
+                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password),
+                    supportingText = {
+                        if (isSignUp && password.isNotEmpty()) {
+                            val validation = com.keith.modi.utils.ValidationUtils.validatePassword(password)
+                            if (validation is com.keith.modi.utils.ValidationUtils.ValidationResult.Error) {
+                                Text(
+                                    text = validation.message,
+                                    color = MaterialTheme.colorScheme.error,
+                                    style = MaterialTheme.typography.labelSmall
+                                )
+                            } else {
+                                Text(
+                                    text = "Strong Password ✨",
+                                    color = Color(0xFF2E7D32),
+                                    style = MaterialTheme.typography.labelSmall
+                                )
+                            }
+                        }
                     }
+                )
+            }
+
+            if (!isSignUp && !isForgotPassword) {
+                Box(modifier = Modifier.fillMaxWidth(), contentAlignment = Alignment.CenterEnd) {
+                    Text(
+                        text = "Forgot Password?",
+                        color = MaterialTheme.colorScheme.primary,
+                        style = MaterialTheme.typography.labelMedium,
+                        fontWeight = FontWeight.Bold,
+                        modifier = Modifier
+                            .padding(top = 8.dp)
+                            .clickable { isForgotPassword = true }
+                    )
                 }
-            )
+            }
 
             Spacer(modifier = Modifier.height(32.dp))
 
             Button(
                 onClick = {
-                    if (isSignUp) {
-                        viewModel.signUp(email, password, name, selectedRole)
-                    } else {
-                        viewModel.login(email, password)
+                    when {
+                        isForgotPassword -> viewModel.resetPassword(email)
+                        isSignUp -> viewModel.signUp(email, password, name, selectedRole)
+                        else -> viewModel.login(email, password)
                     }
                 },
                 modifier = Modifier.fillMaxWidth().height(56.dp),
@@ -184,26 +223,43 @@ fun LoginScreen(
                 if (authState is AuthState.Loading) {
                     CircularProgressIndicator(color = MaterialTheme.colorScheme.onPrimary, modifier = Modifier.size(24.dp))
                 } else {
-                    Text(if (isSignUp) "Register" else "Login", fontSize = 18.sp, fontWeight = FontWeight.Bold)
+                    Text(
+                        text = when {
+                            isForgotPassword -> "Send Recovery Link"
+                            isSignUp -> "Register"
+                            else -> "Login"
+                        },
+                        fontSize = 18.sp,
+                        fontWeight = FontWeight.Bold
+                    )
                 }
             }
 
             Spacer(modifier = Modifier.height(24.dp))
 
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                Text(if (isSignUp) "Already have an account? " else "Don't have an account? ", color = MaterialTheme.colorScheme.onSurfaceVariant)
+            if (!isForgotPassword) {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Text(if (isSignUp) "Already have an account? " else "Don't have an account? ", color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    Text(
+                        text = if (isSignUp) "Login" else "Sign Up",
+                        color = MaterialTheme.colorScheme.primary,
+                        fontWeight = FontWeight.Bold,
+                        modifier = Modifier.clickable { isSignUp = !isSignUp }
+                    )
+                }
+            } else {
                 Text(
-                    text = if (isSignUp) "Login" else "Sign Up",
+                    text = "Back to Login",
                     color = MaterialTheme.colorScheme.primary,
                     fontWeight = FontWeight.Bold,
-                    modifier = Modifier.clickable { isSignUp = !isSignUp }
+                    modifier = Modifier.clickable { isForgotPassword = false }
                 )
             }
         }
 
         Spacer(modifier = Modifier.weight(1f))
         
-        // PENDO: Secure Error Banner
+        // PENDO: Secure Info/Error Banner
         AnimatedVisibility(visible = authState is AuthState.Error) {
             if (authState is AuthState.Error) {
                 Surface(
@@ -212,11 +268,99 @@ fun LoginScreen(
                     modifier = Modifier.fillMaxWidth().padding(bottom = 16.dp)
                 ) {
                     Row(modifier = Modifier.padding(16.dp), verticalAlignment = Alignment.CenterVertically) {
-                        Icon(Icons.Default.ErrorOutline, null, tint = MaterialTheme.colorScheme.error)
+                        Icon(
+                            Icons.Default.ErrorOutline,
+                            null,
+                            tint = MaterialTheme.colorScheme.error
+                        )
                         Spacer(Modifier.width(12.dp))
-                        Text((authState as AuthState.Error).message, color = MaterialTheme.colorScheme.onErrorContainer)
+                        Text(
+                            text = (authState as AuthState.Error).message,
+                            color = MaterialTheme.colorScheme.onErrorContainer
+                        )
                     }
                 }
+            }
+        }
+    }
+
+    // PENDO: Check Email Information Overlay
+    if (authState is AuthState.PasswordResetRequested) {
+        CheckEmailOverlay(email) {
+            viewModel.resetState()
+            isForgotPassword = false
+        }
+    }
+}
+
+@Composable
+fun CheckEmailOverlay(email: String, onDismiss: () -> Unit) {
+    Surface(
+        modifier = Modifier.fillMaxSize(),
+        color = MaterialTheme.colorScheme.background
+    ) {
+        Column(
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(24.dp),
+            horizontalAlignment = Alignment.CenterHorizontally,
+            verticalArrangement = Arrangement.Center
+        ) {
+            Surface(
+                modifier = Modifier.size(100.dp),
+                shape = CircleShape,
+                color = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.2f)
+            ) {
+                Box(contentAlignment = Alignment.Center) {
+                    Icon(
+                        Icons.Default.MailOutline,
+                        null,
+                        modifier = Modifier.size(50.dp),
+                        tint = MaterialTheme.colorScheme.primary
+                    )
+                }
+            }
+            
+            Spacer(Modifier.height(32.dp))
+            
+            Text(
+                "Check your email",
+                style = MaterialTheme.typography.headlineMedium,
+                fontWeight = FontWeight.Bold
+            )
+            
+            Spacer(Modifier.height(16.dp))
+            
+            Text(
+                text = "We have sent a password recovery link to:",
+                style = MaterialTheme.typography.bodyLarge,
+                textAlign = TextAlign.Center,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+            
+            Text(
+                text = email,
+                style = MaterialTheme.typography.bodyLarge,
+                fontWeight = FontWeight.ExtraBold,
+                color = MaterialTheme.colorScheme.primary,
+                modifier = Modifier.padding(vertical = 8.dp)
+            )
+            
+            Text(
+                text = "Click the link in the email to securely reset your password within the app.",
+                style = MaterialTheme.typography.bodyMedium,
+                textAlign = TextAlign.Center,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+            
+            Spacer(Modifier.height(48.dp))
+            
+            Button(
+                onClick = onDismiss,
+                modifier = Modifier.fillMaxWidth().height(56.dp),
+                shape = RoundedCornerShape(28.dp)
+            ) {
+                Text("Back to Login", fontWeight = FontWeight.Bold)
             }
         }
     }

@@ -2,10 +2,17 @@ package com.keith.modi.models
 
 import android.app.Application
 import android.content.Context
+import android.net.ConnectivityManager
+import android.net.Network
+import android.net.NetworkCapabilities
+import android.net.NetworkRequest
 import androidx.core.content.edit
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
+import androidx.security.crypto.EncryptedSharedPreferences
+import androidx.security.crypto.MasterKey
 import com.keith.modi.Supabase
+import com.keith.modi.utils.NetworkUtils
 import io.github.jan.supabase.auth.auth
 import io.github.jan.supabase.auth.status.SessionStatus
 import io.github.jan.supabase.postgrest.postgrest
@@ -34,19 +41,52 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     private val _isGuest = MutableStateFlow(false)
     val isGuest: StateFlow<Boolean> = _isGuest.asStateFlow()
 
-    private val _isOnline = MutableStateFlow(true)
+    private val _isOnline = MutableStateFlow(NetworkUtils.isNetworkAvailable(application))
     val isOnline: StateFlow<Boolean> = _isOnline.asStateFlow()
 
     private val _showOfflineDialog = MutableStateFlow(false)
     val showOfflineDialog: StateFlow<Boolean> = _showOfflineDialog.asStateFlow()
 
     private val json = Json { ignoreUnknownKeys = true }
-    private val prefs = application.getSharedPreferences("modi_cache", Context.MODE_PRIVATE)
+    
+    // PENDO: Encrypted Cache for User Profile
+    private val masterKey = MasterKey.Builder(application)
+        .setKeyScheme(MasterKey.KeyScheme.AES256_GCM)
+        .build()
+
+    private val prefs = EncryptedSharedPreferences.create(
+        application,
+        "modi_cache",
+        masterKey,
+        EncryptedSharedPreferences.PrefKeyEncryptionScheme.AES256_SIV,
+        EncryptedSharedPreferences.PrefValueEncryptionScheme.AES256_GCM
+    )
 
     init {
         loadCachedProfile()
         observeSessionStatus()
         listenToProfileChanges()
+        observeNetwork()
+    }
+
+    private fun observeNetwork() {
+        val connectivityManager = getApplication<Application>().getSystemService(Context.CONNECTIVITY_SERVICE) as ConnectivityManager
+        val request = NetworkRequest.Builder()
+            .addCapability(NetworkCapabilities.NET_CAPABILITY_INTERNET)
+            .build()
+        
+        connectivityManager.registerNetworkCallback(request, object : ConnectivityManager.NetworkCallback() {
+            override fun onAvailable(network: Network) {
+                _isOnline.value = true
+                if (_userProfile.value == null) {
+                    fetchUserProfile()
+                }
+            }
+
+            override fun onLost(network: Network) {
+                _isOnline.value = false
+            }
+        })
     }
 
     private fun observeSessionStatus() {

@@ -244,7 +244,7 @@ fun ListAirbnbScreen(
             if (currentStep > 0) {
                 Button(
                     onClick = {
-                        val validationError = getValidationError(currentStep, name, locationName, price, selectedImages, description, selectedCategories, isLocationCaptured)
+                        val validationError = getValidationError(currentStep, name, locationName, price, totalRooms, selectedImages, description, selectedCategories, isLocationCaptured)
                         if (validationError == null) {
                             if (currentStep < totalSteps) {
                                 currentStep++
@@ -263,7 +263,7 @@ fun ListAirbnbScreen(
                     enabled = listingState !is HostListingState.Loading,
                     shape = RoundedCornerShape(16.dp),
                     colors = ButtonDefaults.buttonColors(
-                        containerColor = if (getValidationError(currentStep, name, locationName, price, selectedImages, description, selectedCategories, isLocationCaptured) == null) 
+                        containerColor = if (getValidationError(currentStep, name, locationName, price, totalRooms, selectedImages, description, selectedCategories, isLocationCaptured) == null)
                             MaterialTheme.colorScheme.primary 
                         else 
                             MaterialTheme.colorScheme.outline
@@ -292,15 +292,16 @@ fun ListAirbnbScreen(
     }
 }
 
-private fun getValidationError(step: Int, name: String, location: String, price: String, images: List<Uri>, desc: String, categories: Set<String>, locationCaptured: Boolean): String? {
+private fun getValidationError(step: Int, name: String, location: String, price: String, totalRooms: String, images: List<Uri>, desc: String, categories: Set<String>, locationCaptured: Boolean): String? {
     return when(step) {
         1 -> if (name.isBlank()) "Kindly fill out the property name ✨" else null
         2 -> if (categories.isEmpty()) "Please pick at least one category 🌟" else null
         3 -> if (!locationCaptured) "We recommend capturing your location for better visibility 📍" else null
         4 -> if (location.isBlank()) "Kindly specify the location area 🏙️" else null
-        5 -> if (price.isBlank()) "Please set a price for your space 💰" else null
-        6 -> if (images.isEmpty()) "At least one photo is required 📸" else null
-        7 -> if (desc.isBlank()) "Tell us a bit about your space ✨" else null
+        5 -> if (totalRooms.isBlank() || (totalRooms.toIntOrNull() ?: 0) < 1) "Please enter a valid number of rooms 🛌" else null
+        6 -> if (price.isBlank()) "Please set a price for your space 💰" else null
+        7 -> if (images.isEmpty()) "At least one photo is required 📸" else null
+        8 -> if (desc.isBlank()) "Tell us a bit about your space ✨" else null
         else -> null
     }
 }

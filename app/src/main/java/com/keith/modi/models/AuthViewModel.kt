@@ -16,9 +16,11 @@ import kotlinx.serialization.json.buildJsonObject
 import kotlinx.serialization.json.put
 
 sealed class AuthState {
-    object Initial : AuthState() // PENDO: Separate initial state from Idle/Logout
+    object Initial : AuthState()
     object Idle : AuthState()
     object Loading : AuthState()
+    object PasswordResetRequested : AuthState() // New state for "Check your email" screen
+    object PasswordResetRequired : AuthState() // PENDO: Specific state for recovery
     data class Success(val message: String) : AuthState()
     data class Error(val message: String) : AuthState()
 }
@@ -31,6 +33,12 @@ class AuthViewModel : ViewModel() {
     fun signUp(email: String, pass: String, name: String, role: UserRole = UserRole.CUSTOMER) {
         if (email.isBlank() || pass.isBlank() || name.isBlank()) {
             _authState.value = AuthState.Error("Kindly fill out all details")
+            return
+        }
+
+        val emailValidation = ValidationUtils.validateEmail(email)
+        if (emailValidation is ValidationUtils.ValidationResult.Error) {
+            _authState.value = AuthState.Error(emailValidation.message)
             return
         }
 
@@ -84,6 +92,10 @@ class AuthViewModel : ViewModel() {
 
     fun setLoggedIn() {
         _authState.value = AuthState.Success("Welcome back!")
+    }
+
+    fun setResetRequired() {
+        _authState.value = AuthState.PasswordResetRequired
     }
 
     fun logout() {
@@ -167,6 +179,8 @@ class AuthViewModel : ViewModel() {
                     password = newPass
                 }
                 _authState.value = AuthState.Success("Password updated successfully!")
+                // PENDO: Force login state after reset to trigger main app observer
+                setLoggedIn()
             } catch (e: Exception) {
                 _authState.value = AuthState.Error(ErrorUtils.sanitizeError(e))
             }
@@ -218,6 +232,46 @@ class AuthViewModel : ViewModel() {
                 _authState.value = AuthState.Error("Deletion request submitted. You have been logged out.")
             } catch (e: Exception) {
                 _authState.value = AuthState.Error(ErrorUtils.sanitizeError(e))
+            }
+        }
+    }
+
+    fun resetPassword(email: String) {
+        if (email.isBlank()) {
+            _authState.value = AuthState.Error("Please enter your email address")
+            return
+        }
+
+        val emailValidation = ValidationUtils.validateEmail(email)
+        if (emailValidation is ValidationUtils.ValidationResult.Error) {
+            _authState.value = AuthState.Error(emailValidation.message)
+            return
+        }
+
+        viewModelScope.launch {
+            _authState.value = AuthState.Loading
+            try {
+                // PENDO SECURITY: Check if user exists in our profiles table first.
+                val exists = Supabase.client.postgrest["profiles"]
+                    .select {
+                        filter { eq("email", email) }
+                    }.decodeList<Profile>().isNotEmpty()
+                
+                if (!exists) {
+                    _authState.value = AuthState.Error("Invalid user. This email is not registered with Modi.")
+                    return@launch
+                }
+
+                Supabase.client.auth.resetPasswordForEmail(email)
+                _authState.value = AuthState.PasswordResetRequested
+            } catch (e: Exception) {
+                // PENDO: Fallback - Try to send anyway if profiles check fails (e.g. schema issues)
+                try {
+                    Supabase.client.auth.resetPasswordForEmail(email)
+                    _authState.value = AuthState.PasswordResetRequested
+                } catch (inner: Exception) {
+                    _authState.value = AuthState.Error(ErrorUtils.sanitizeError(inner))
+                }
             }
         }
     }

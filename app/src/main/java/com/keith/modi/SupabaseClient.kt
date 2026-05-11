@@ -1,6 +1,8 @@
 package com.keith.modi
 
 import android.content.Context
+import androidx.security.crypto.EncryptedSharedPreferences
+import androidx.security.crypto.MasterKey
 import io.github.jan.supabase.createSupabaseClient
 import io.github.jan.supabase.auth.Auth
 import io.github.jan.supabase.auth.SessionManager
@@ -11,11 +13,10 @@ import io.github.jan.supabase.storage.Storage
 import io.github.jan.supabase.functions.Functions
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.encodeToString
-import kotlinx.serialization.decodeFromString
 
 object Supabase {
-    private const val SUPABASE_URL = "https://beztonodgfvlrxzyxkxb.supabase.co"
-    private const val SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImJlenRvbm9kZ2Z2bHJ4enl4a3hiIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzgyMjkyMDYsImV4cCI6MjA5MzgwNTIwNn0.DdIC1FaWOrNGd5tFmnIVkq9jg4yVdyJHsiNXJKPahdc"
+    private val SUPABASE_URL = BuildConfig.SUPABASE_URL
+    private val SUPABASE_ANON_KEY = BuildConfig.SUPABASE_ANON_KEY
 
     lateinit var client: io.github.jan.supabase.SupabaseClient
 
@@ -26,7 +27,7 @@ object Supabase {
         ) {
             install(Postgrest)
             install(Auth) {
-                sessionManager = SharedPreferencesSessionManager(context)
+                sessionManager = SecureSessionManager(context)
             }
             install(Realtime)
             install(Storage)
@@ -36,11 +37,22 @@ object Supabase {
 }
 
 /**
- * PENDO: High-Security Session Persistence
- * Encapsulates the user's session in Android's private SharedPreferences.
+ * PENDO: Military-Grade Session Persistence
+ * Uses AES-256 encryption to protect session tokens at rest.
  */
-class SharedPreferencesSessionManager(context: Context) : SessionManager {
-    private val prefs = context.getSharedPreferences("modi_secure_session", Context.MODE_PRIVATE)
+class SecureSessionManager(context: Context) : SessionManager {
+    private val masterKey = MasterKey.Builder(context)
+        .setKeyScheme(MasterKey.KeyScheme.AES256_GCM)
+        .build()
+    
+    private val prefs = EncryptedSharedPreferences.create(
+        context,
+        "modi_secure_session",
+        masterKey,
+        EncryptedSharedPreferences.PrefKeyEncryptionScheme.AES256_SIV,
+        EncryptedSharedPreferences.PrefValueEncryptionScheme.AES256_GCM
+    )
+
     private val json = Json { ignoreUnknownKeys = true }
 
     override suspend fun saveSession(session: UserSession) {

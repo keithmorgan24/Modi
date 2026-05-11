@@ -12,6 +12,8 @@ import io.github.jan.supabase.postgrest.postgrest
 import io.github.jan.supabase.realtime.realtime
 import io.github.jan.supabase.realtime.channel
 import io.github.jan.supabase.realtime.postgresListDataFlow
+import kotlinx.coroutines.async
+import kotlinx.coroutines.awaitAll
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -19,7 +21,6 @@ import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.launch
 import java.util.UUID
 import kotlin.collections.get
-import kotlin.reflect.KProperty1
 
 sealed class HostListingState {
     object Idle : HostListingState()
@@ -73,7 +74,6 @@ class HostViewModel : ViewModel() {
             try {
                 val userId = Supabase.client.auth.currentUserOrNull()?.id
                 if (userId != null) {
-                    // Fetch bookings for properties owned by this host using a join
                     val bookings = Supabase.client.postgrest["bookings"]
                         .select(columns = io.github.jan.supabase.postgrest.query.Columns.raw("*, properties!inner(*)")) {
                             filter {
@@ -85,7 +85,6 @@ class HostViewModel : ViewModel() {
                     _pendingBookings.value = myPendingBookings
                     _pendingBookingsCount.value = myPendingBookings.size
 
-                    // Calculate earnings (sum of feePaid for CONFIRMED bookings)
                     val confirmedBookings = bookings.filter { it.status == "CONFIRMED" }
                     _totalEarnings.value = confirmedBookings.sumOf { it.feePaid }
                 }
@@ -133,31 +132,32 @@ class HostViewModel : ViewModel() {
                     ?: throw Exception("User not authenticated")
 
                 val tags = mutableSetOf<String>()
-                // Add host-selected categories to tags for high-precision search
                 tags.addAll(categories)
                 
                 val imageUrls = imageUris.map { uri ->
-                    val result = CloudinaryHelper.uploadImage(context, uri, "properties")
-                    
-                    // Extract AI tags from Cloudinary response
-                    val info = result["info"] as? Map<*, *>
-                    val categorization = info?.get("categorization") as? Map<*, *>
-                    val googleTagging = categorization?.get("google_tagging") as? Map<*, *>
-                    val detectedTags = googleTagging?.get("data") as? List<*>
-                    
-                    detectedTags?.forEach { tag ->
-                        val tagMap = tag as? Map<*, *>
-                        val tagName = tagMap?.get("tag") as? String
-                        val confidence = (tagMap?.get("confidence") as? Number)?.toDouble() ?: 0.0
-                        if (tagName != null && confidence > 0.7) {
-                            tags.add(tagName)
+                    async {
+                        val result = CloudinaryHelper.uploadImage(context, uri, "properties")
+                        
+                        val info = result["info"] as? Map<*, *>
+                        val categorization = info?.get("categorization") as? Map<*, *>
+                        val googleTagging = categorization?.get("google_tagging") as? Map<*, *>
+                        val detectedTags = googleTagging?.get("data") as? List<*>
+                        
+                        detectedTags?.forEach { tag ->
+                            val tagMap = tag as? Map<*, *>
+                            val tagName = tagMap?.get("tag") as? String
+                            val confidence = (tagMap?.get("confidence") as? Number)?.toDouble() ?: 0.0
+                            if (tagName != null && confidence > 0.7) {
+                                synchronized(tags) {
+                                    tags.add(tagName)
+                                }
+                            }
                         }
+
+                        result["secure_url"] as String
                     }
+                }.awaitAll()
 
-                    result["secure_url"] as String
-                }
-
-                // Append AI tags to description for better searchability
                 val enrichedDescription = if (tags.isNotEmpty()) {
                     "$description\n\n#${tags.joinToString(" #")}"
                 } else {
@@ -201,9 +201,8 @@ class HostViewModel : ViewModel() {
                         eq("id", bookingId)
                     }
                 }
-                fetchStats() // Refresh
+                fetchStats()
             } catch (e: Exception) {
-                // Handle error
             }
         }
     }
@@ -218,9 +217,8 @@ class HostViewModel : ViewModel() {
                         eq("id", bookingId)
                     }
                 }
-                fetchStats() // Refresh
+                fetchStats()
             } catch (e: Exception) {
-                // Handle error
             }
         }
     }
@@ -235,7 +233,6 @@ class HostViewModel : ViewModel() {
                 }
                 _myProperties.value = _myProperties.value.filter { it.id != propertyId }
             } catch (e: Exception) {
-                // Handle error
             }
         }
     }
@@ -270,7 +267,6 @@ class HostViewModel : ViewModel() {
                     ) else it
                 }
             } catch (e: Exception) {
-                // Handle error
             }
         }
     }
@@ -287,7 +283,6 @@ class HostViewModel : ViewModel() {
                     if (it.id == id) it.copy(occupiedRooms = occupiedCount) else it
                 }
             } catch (e: Exception) {
-                // Handle error
             }
         }
     }

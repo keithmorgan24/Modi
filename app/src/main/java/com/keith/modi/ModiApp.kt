@@ -31,17 +31,20 @@ fun ModiApp(mainViewModel: MainViewModel = viewModel()) {
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
     
+    // PENDO: Deep Link Handler
+    LaunchedEffect(Unit) {
+        val activity = context as? androidx.activity.ComponentActivity
+        val intent = activity?.intent
+        val data = intent?.data
+        if (data != null && data.scheme == "modiapp") {
+            // If we have a recovery token, take user to reset screen
+            authViewModel.setResetRequired()
+        }
+    }
+    
     // PENDO: Intelligent Offline Monitoring
     val isOnline by mainViewModel.isOnline.collectAsState()
     
-    LaunchedEffect(Unit) {
-        while(true) {
-            val online = NetworkUtils.isNetworkAvailable(context)
-            mainViewModel.updateOnlineStatus(online)
-            delay(5000) // Check every 5 seconds
-        }
-    }
-
     NavHost(navController = navController, startDestination = "splash") {
         
         composable("splash") {
@@ -86,6 +89,15 @@ fun ModiApp(mainViewModel: MainViewModel = viewModel()) {
         composable("login/{isSignUp}") { backStackEntry ->
             val isSignUp = backStackEntry.arguments?.getString("isSignUp")?.toBoolean() ?: false
             LoginScreen(isSignUpInitial = isSignUp, viewModel = authViewModel)
+        }
+
+        composable("reset_password") {
+            ResetPasswordScreen(onComplete = {
+                // PENDO: The password is saved. Now we force a session sync and go home.
+                scope.launch {
+                    authViewModel.setLoggedIn() 
+                }
+            }, viewModel = authViewModel)
         }
 
         composable("main") {
@@ -147,15 +159,23 @@ fun ModiApp(mainViewModel: MainViewModel = viewModel()) {
     LaunchedEffect(authState) {
         when (authState) {
             is AuthState.Success -> {
-                // CRITICAL FIX: Ensure Guest Mode is DISABLED when a user logs in or signs up
+                // PENDO: Ensure Guest Mode is DISABLED and data is synced
                 mainViewModel.setGuestMode(false)
                 mainViewModel.fetchUserProfile()
+                
+                // CRITICAL REDIRECT: Move home and wipe recovery/auth history
                 navController.navigate("main") { 
-                    popUpTo("welcome") { inclusive = true } 
+                    popUpTo(0) { inclusive = true }
+                    launchSingleTop = true
+                }
+            }
+            is AuthState.PasswordResetRequired -> {
+                // PENDO: Prioritize Reset screen over Dashboard
+                navController.navigate("reset_password") {
+                    popUpTo(0) { inclusive = true }
                 }
             }
             is AuthState.Idle -> {
-                // mainViewModel.fetchUserProfile() // No longer needed here
                 navController.navigate("welcome") { 
                     popUpTo(0) { inclusive = true }
                 }

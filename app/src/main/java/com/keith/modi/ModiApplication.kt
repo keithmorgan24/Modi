@@ -14,8 +14,8 @@ class ModiApplication : Application() {
         // Note: Production apps should use UNSIGNED uploads to avoid leaking API Secret.
         // Go to Cloudinary Settings > Upload > Add Upload Preset > Set mode to 'Unsigned'
         val config = mapOf(
-            "cloud_name" to "dtd34ejci",
-            "api_key" to "575175727994488"
+            "cloud_name" to BuildConfig.CLOUDINARY_CLOUD_NAME,
+            "api_key" to BuildConfig.CLOUDINARY_API_KEY
         )
         MediaManager.init(this, config)
     }

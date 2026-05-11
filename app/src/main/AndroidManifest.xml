@@ -24,14 +24,21 @@
             android:theme="@style/Theme.Modi">
             <intent-filter>
                 <action android:name="android.intent.action.MAIN" />
-
                 <category android:name="android.intent.category.LAUNCHER" />
+            </intent-filter>
+
+            <!-- PENDO: High-End Deep Linking for Password Reset -->
+            <intent-filter>
+                <action android:name="android.intent.action.VIEW" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <category android:name="android.intent.category.BROWSABLE" />
+                <data android:scheme="modiapp" />
             </intent-filter>
         </activity>
 
         <meta-data
             android:name="com.google.android.geo.API_KEY"
-            android:value="AIzaSyDbCryDDWbOVrdmZZ6tCK2obgmJFEeXbOA" />
+            android:value="${MAPS_API_KEY}" />
     </application>
 
 </manifest>
