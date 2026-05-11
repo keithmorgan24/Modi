@@ -11,11 +11,10 @@ class ModiApplication : Application() {
         Supabase.init(this)
 
         // PENDO: Initialize Cloudinary with Secure Configuration
-        // Note: Production apps should use UNSIGNED uploads to avoid leaking API Secret.
-        // Go to Cloudinary Settings > Upload > Add Upload Preset > Set mode to 'Unsigned'
+        // For unsigned uploads, we only need the cloud_name. 
+        // Providing api_key can sometimes trigger 401 errors if not correctly validated.
         val config = mapOf(
-            "cloud_name" to BuildConfig.CLOUDINARY_CLOUD_NAME,
-            "api_key" to BuildConfig.CLOUDINARY_API_KEY
+            "cloud_name" to BuildConfig.CLOUDINARY_CLOUD_NAME
         )
         MediaManager.init(this, config)
     }

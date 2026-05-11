@@ -29,6 +29,9 @@ import io.github.jan.supabase.auth.auth
 import io.github.jan.supabase.postgrest.postgrest
 import kotlinx.coroutines.launch
 
+import androidx.compose.ui.tooling.preview.Preview
+import com.keith.modi.ui.theme.ModiTheme
+
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun KycScreen(onVerificationComplete: () -> Unit) {
@@ -141,6 +144,14 @@ fun KycScreen(onVerificationComplete: () -> Unit) {
                 3 -> KycSuccessStep(onVerificationComplete)
             }
         }
+    }
+}
+
+@Preview(showSystemUi = true)
+@Composable
+fun KycScreenPreview() {
+    ModiTheme {
+        KycScreen(onVerificationComplete = {})
     }
 }
 

@@ -42,6 +42,8 @@ import com.google.android.gms.location.LocationServices
 import com.google.android.gms.location.Priority
 import com.keith.modi.models.HostListingState
 import com.keith.modi.models.HostViewModel
+import com.keith.modi.ui.theme.ModiTheme
+import androidx.compose.ui.tooling.preview.Preview
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
@@ -52,7 +54,8 @@ import java.util.Locale
 @Composable
 fun ListAirbnbScreen(
     onBack: () -> Unit,
-    hostViewModel: HostViewModel = viewModel()
+    hostViewModel: HostViewModel = viewModel(),
+    initialProperty: com.keith.modi.models.Property? = null
 ) {
     var currentStep by remember { mutableIntStateOf(0) }
     val totalSteps = 9
@@ -62,20 +65,24 @@ fun ListAirbnbScreen(
     val context = LocalContext.current
 
     // Form State
-    var name by remember { mutableStateOf("") }
-    var description by remember { mutableStateOf("") }
-    var price by remember { mutableStateOf("") }
-    var totalRooms by remember { mutableStateOf("1") }
-    var locationName by remember { mutableStateOf("") }
-    var selectedCategories by remember { mutableStateOf(setOf<String>()) }
+    var name by remember { mutableStateOf(initialProperty?.title ?: "") }
+    var description by remember { mutableStateOf(initialProperty?.description ?: "") }
+    var price by remember { mutableStateOf(initialProperty?.price?.toString() ?: "") }
+    var totalRooms by remember { mutableStateOf(initialProperty?.totalRooms?.toString() ?: "1") }
+    var locationName by remember { mutableStateOf(initialProperty?.locationName ?: "") }
+    var selectedCategories by remember { mutableStateOf(initialProperty?.tags?.toSet() ?: setOf()) }
     var selectedImages by remember { mutableStateOf<List<Uri>>(emptyList()) }
-    var latitude by remember { mutableDoubleStateOf(-1.286389) }
-    var longitude by remember { mutableDoubleStateOf(36.817223) }
-    var isLocationCaptured by remember { mutableStateOf(false) }
+    var latitude by remember { mutableDoubleStateOf(initialProperty?.latitude ?: -1.286389) }
+    var longitude by remember { mutableDoubleStateOf(initialProperty?.longitude ?: 36.817223) }
+    var isLocationCaptured by remember { mutableStateOf(initialProperty?.latitude != null) }
     
     val listingState by hostViewModel.listingState.collectAsState()
+    val backendCategories by hostViewModel.categories.collectAsState()
+    
+    val isEditing = initialProperty != null
     var showSuccessDialog by remember { mutableStateOf(false) }
-    val categories = listOf("Nearby", "Beachfront", "Pool", "Luxury", "Modern", "WiFi", "Central", "Cabins")
+    var showAddCategoryDialog by remember { mutableStateOf(false) }
+    var newCategoryName by remember { mutableStateOf("") }
 
     LaunchedEffect(listingState) {
         when (listingState) {
@@ -93,8 +100,8 @@ fun ListAirbnbScreen(
         AlertDialog(
             onDismissRequest = { /* Force explicit action */ },
             icon = { Icon(Icons.Default.CheckCircle, contentDescription = null, modifier = Modifier.size(64.dp), tint = Color(0xFF4CAF50)) },
-            title = { Text("Property Published! 🚀", fontWeight = FontWeight.ExtraBold) },
-            text = { Text("Congratulations! Your Airbnb '$name' is now live and visible to guests worldwide on Modi. Get ready for bookings! ✨", textAlign = TextAlign.Center) },
+            title = { Text(if (isEditing) "Property Updated! 🚀" else "Property Published! 🚀", fontWeight = FontWeight.ExtraBold) },
+            text = { Text(if (isEditing) "Your updates for '$name' are now live!" else "Congratulations! Your Airbnb '$name' is now live and visible to guests worldwide on Modi. Get ready for bookings! ✨", textAlign = TextAlign.Center) },
             confirmButton = {
                 Button(
                     onClick = {
@@ -105,7 +112,41 @@ fun ListAirbnbScreen(
                     modifier = Modifier.fillMaxWidth(),
                     shape = RoundedCornerShape(12.dp)
                 ) {
-                    Text("Awesome! Take me to Dashboard", fontWeight = FontWeight.Bold)
+                    Text("Awesome! Take me back", fontWeight = FontWeight.Bold)
+                }
+            }
+        )
+    }
+
+    if (showAddCategoryDialog) {
+        AlertDialog(
+            onDismissRequest = { showAddCategoryDialog = false },
+            title = { Text("Add Custom Category") },
+            text = {
+                OutlinedTextField(
+                    value = newCategoryName,
+                    onValueChange = { newCategoryName = it },
+                    label = { Text("Category Name") },
+                    singleLine = true,
+                    modifier = Modifier.fillMaxWidth(),
+                    shape = RoundedCornerShape(16.dp)
+                )
+            },
+            confirmButton = {
+                Button(onClick = {
+                    if (newCategoryName.isNotBlank()) {
+                        hostViewModel.addCategory(newCategoryName)
+                        selectedCategories = selectedCategories + newCategoryName.trim().replaceFirstChar { it.uppercase() }
+                        newCategoryName = ""
+                        showAddCategoryDialog = false
+                    }
+                }) {
+                    Text("Add")
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { showAddCategoryDialog = false }) {
+                    Text("Cancel")
                 }
             }
         )
@@ -119,7 +160,7 @@ fun ListAirbnbScreen(
                     if (currentStep > 0) {
                         Text("Step $currentStep of $totalSteps", style = MaterialTheme.typography.titleMedium)
                     } else {
-                        Text("List Your Property", fontWeight = FontWeight.Bold)
+                        Text(if (isEditing) "Edit Your Property" else "List Your Property", fontWeight = FontWeight.Bold)
                     }
                 },
                 navigationIcon = {
@@ -177,7 +218,8 @@ fun ListAirbnbScreen(
                                     selectedCategories + cat
                                 }
                             },
-                            categories = categories
+                            categories = backendCategories.map { it.name },
+                            onAddCustom = { showAddCategoryDialog = true }
                         )
                         3 -> LocationCaptureStep(
                             isCaptured = isLocationCaptured,
@@ -244,14 +286,31 @@ fun ListAirbnbScreen(
             if (currentStep > 0) {
                 Button(
                     onClick = {
-                        val validationError = getValidationError(currentStep, name, locationName, price, totalRooms, selectedImages, description, selectedCategories, isLocationCaptured)
+                        val validationError = getValidationError(currentStep, name, locationName, price, totalRooms, selectedImages, description, selectedCategories, isLocationCaptured, isEditing)
                         if (validationError == null) {
                             if (currentStep < totalSteps) {
                                 currentStep++
                             } else {
                                 val priceVal = price.toDoubleOrNull() ?: 0.0
                                 val roomsVal = totalRooms.toIntOrNull() ?: 1
-                                hostViewModel.createListing(context, name, description, priceVal, locationName, selectedCategories.toList(), selectedImages, latitude, longitude, roomsVal)
+                                if (isEditing) {
+                                    hostViewModel.updateProperty(
+                                        id = initialProperty!!.id!!,
+                                        name = name,
+                                        description = description,
+                                        price = priceVal,
+                                        location = locationName,
+                                        category = selectedCategories.firstOrNull() ?: "Nearby"
+                                    )
+                                    // PENDO: Trigger success manually for edit
+                                    scope.launch {
+                                        snackbarHostState.showSnackbar("Listing updated successfully!")
+                                        delay(1000)
+                                        onBack()
+                                    }
+                                } else {
+                                    hostViewModel.createListing(context, name, description, priceVal, locationName, selectedCategories.toList(), selectedImages, latitude, longitude, roomsVal)
+                                }
                             }
                         } else {
                             scope.launch {
@@ -263,7 +322,7 @@ fun ListAirbnbScreen(
                     enabled = listingState !is HostListingState.Loading,
                     shape = RoundedCornerShape(16.dp),
                     colors = ButtonDefaults.buttonColors(
-                        containerColor = if (getValidationError(currentStep, name, locationName, price, totalRooms, selectedImages, description, selectedCategories, isLocationCaptured) == null)
+                        containerColor = if (getValidationError(currentStep, name, locationName, price, totalRooms, selectedImages, description, selectedCategories, isLocationCaptured, isEditing) == null)
                             MaterialTheme.colorScheme.primary 
                         else 
                             MaterialTheme.colorScheme.outline
@@ -284,7 +343,7 @@ fun ListAirbnbScreen(
                         Spacer(modifier = Modifier.width(12.dp))
                         Text(loadingMsg, fontWeight = FontWeight.Bold)
                     } else {
-                        Text(if (currentStep < totalSteps) "Continue ➡️" else "Publish My Airbnb 🚀", fontWeight = FontWeight.Bold, fontSize = 16.sp)
+                        Text(if (currentStep < totalSteps) "Continue ➡️" else if (isEditing) "Save Changes 💾" else "Publish My Airbnb 🚀", fontWeight = FontWeight.Bold, fontSize = 16.sp)
                     }
                 }
             }
@@ -292,7 +351,7 @@ fun ListAirbnbScreen(
     }
 }
 
-private fun getValidationError(step: Int, name: String, location: String, price: String, totalRooms: String, images: List<Uri>, desc: String, categories: Set<String>, locationCaptured: Boolean): String? {
+private fun getValidationError(step: Int, name: String, location: String, price: String, totalRooms: String, images: List<Uri>, desc: String, categories: Set<String>, locationCaptured: Boolean, isEditing: Boolean): String? {
     return when(step) {
         1 -> if (name.isBlank()) "Kindly fill out the property name ✨" else null
         2 -> if (categories.isEmpty()) "Please pick at least one category 🌟" else null
@@ -300,7 +359,7 @@ private fun getValidationError(step: Int, name: String, location: String, price:
         4 -> if (location.isBlank()) "Kindly specify the location area 🏙️" else null
         5 -> if (totalRooms.isBlank() || (totalRooms.toIntOrNull() ?: 0) < 1) "Please enter a valid number of rooms 🛌" else null
         6 -> if (price.isBlank()) "Please set a price for your space 💰" else null
-        7 -> if (images.isEmpty()) "At least one photo is required 📸" else null
+        7 -> if (images.isEmpty() && !isEditing) "At least one photo is required 📸" else null
         8 -> if (desc.isBlank()) "Tell us a bit about your space ✨" else null
         else -> null
     }
@@ -369,7 +428,8 @@ fun SimpleInputStep(
 fun MultiCategoryStep(
     selectedCategories: Set<String>,
     onCategoryToggle: (String) -> Unit,
-    categories: List<String>
+    categories: List<String>,
+    onAddCustom: () -> Unit
 ) {
     Column(modifier = Modifier.fillMaxWidth().verticalScroll(rememberScrollState())) {
         Text("What categories best describe your place? 🌟", style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.Bold)
@@ -379,26 +439,43 @@ fun MultiCategoryStep(
         Spacer(modifier = Modifier.height(32.dp))
         
         Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
-            categories.chunked(2).forEach { rowItems ->
+            val itemsWithAdd = categories + "Add Custom +"
+            itemsWithAdd.chunked(2).forEach { rowItems ->
                 Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
                     rowItems.forEach { cat ->
-                        val isSelected = selectedCategories.contains(cat)
-                        Surface(
-                            modifier = Modifier
-                                .weight(1f)
-                                .height(60.dp)
-                                .clickable { onCategoryToggle(cat) },
-                            shape = RoundedCornerShape(16.dp),
-                            color = if (isSelected) MaterialTheme.colorScheme.primaryContainer else MaterialTheme.colorScheme.surfaceVariant,
-                            border = if (isSelected) androidx.compose.foundation.BorderStroke(2.dp, MaterialTheme.colorScheme.primary) else null
-                        ) {
-                            Box(contentAlignment = Alignment.Center) {
-                                Row(verticalAlignment = Alignment.CenterVertically) {
-                                    if (isSelected) {
-                                        Icon(Icons.Default.Check, contentDescription = null, modifier = Modifier.size(18.dp), tint = MaterialTheme.colorScheme.primary)
-                                        Spacer(modifier = Modifier.width(8.dp))
+                        if (cat == "Add Custom +") {
+                            Surface(
+                                modifier = Modifier
+                                    .weight(1f)
+                                    .height(60.dp)
+                                    .clickable { onAddCustom() },
+                                shape = RoundedCornerShape(16.dp),
+                                color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f),
+                                border = androidx.compose.foundation.BorderStroke(1.dp, MaterialTheme.colorScheme.primary.copy(alpha = 0.5f))
+                            ) {
+                                Box(contentAlignment = Alignment.Center) {
+                                    Text(cat, color = MaterialTheme.colorScheme.primary, fontWeight = FontWeight.Bold)
+                                }
+                            }
+                        } else {
+                            val isSelected = selectedCategories.contains(cat)
+                            Surface(
+                                modifier = Modifier
+                                    .weight(1f)
+                                    .height(60.dp)
+                                    .clickable { onCategoryToggle(cat) },
+                                shape = RoundedCornerShape(16.dp),
+                                color = if (isSelected) MaterialTheme.colorScheme.primaryContainer else MaterialTheme.colorScheme.surfaceVariant,
+                                border = if (isSelected) androidx.compose.foundation.BorderStroke(2.dp, MaterialTheme.colorScheme.primary) else null
+                            ) {
+                                Box(contentAlignment = Alignment.Center) {
+                                    Row(verticalAlignment = Alignment.CenterVertically) {
+                                        if (isSelected) {
+                                            Icon(Icons.Default.Check, contentDescription = null, modifier = Modifier.size(18.dp), tint = MaterialTheme.colorScheme.primary)
+                                            Spacer(modifier = Modifier.width(8.dp))
+                                        }
+                                        Text(cat, fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Medium)
                                     }
-                                    Text(cat, fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Medium)
                                 }
                             }
                         }
@@ -646,5 +723,13 @@ fun ListingReviewStep(
                 }
             }
         }
+    }
+}
+
+@Preview(showBackground = true)
+@Composable
+fun ListAirbnbScreenPreview() {
+    ModiTheme {
+        ListAirbnbScreen(onBack = {})
     }
 }

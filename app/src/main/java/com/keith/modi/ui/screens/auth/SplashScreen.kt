@@ -14,6 +14,9 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import kotlinx.coroutines.delay
 
+import androidx.compose.ui.tooling.preview.Preview
+import com.keith.modi.ui.theme.ModiTheme
+
 @Composable
 fun SplashScreen(onTimeout: () -> Unit) {
     var visible by remember { mutableStateOf(false) }
@@ -60,5 +63,13 @@ fun SplashScreen(onTimeout: () -> Unit) {
                 )
             }
         }
+    }
+}
+
+@Preview(showSystemUi = true)
+@Composable
+fun SplashScreenPreview() {
+    ModiTheme {
+        SplashScreen(onTimeout = {})
     }
 }

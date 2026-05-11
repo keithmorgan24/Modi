@@ -14,6 +14,9 @@ import com.google.maps.android.compose.*
 import com.keith.modi.models.Property
 import kotlin.random.Random
 
+import androidx.compose.ui.tooling.preview.Preview
+import com.keith.modi.ui.theme.ModiTheme
+
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun MapScreen(
@@ -70,6 +73,14 @@ fun MapScreen(
                 )
             }
         }
+    }
+}
+
+@Preview(showSystemUi = true)
+@Composable
+fun MapScreenPreview() {
+    ModiTheme {
+        MapScreen(properties = emptyList(), onBack = {}, onPropertyClick = {})
     }
 }
 

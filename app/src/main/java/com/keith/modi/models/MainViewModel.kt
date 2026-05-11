@@ -111,6 +111,12 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     }
 
     fun toggleRole() {
+        val baseRole = _userProfile.value?.role ?: "CUSTOMER"
+        if (baseRole != "HOST" && _currentRole.value == UserRole.CUSTOMER) {
+            // PENDO: Prevent customer from switching to host if they don't have the role in DB
+            println("[SECURITY] Customer attempted to switch to hosting without authorization")
+            return
+        }
         _currentRole.value = if (_currentRole.value == UserRole.CUSTOMER) UserRole.HOST else UserRole.CUSTOMER
     }
 

@@ -28,6 +28,7 @@ import coil.compose.AsyncImage
 import android.content.Intent
 import android.net.Uri
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.tooling.preview.Preview
 import com.keith.modi.models.Property
 import com.keith.modi.models.PropertyState
 import com.keith.modi.models.PropertyViewModel
@@ -290,5 +291,32 @@ fun FilterSheetContent(onApply: () -> Unit) {
 fun ShimmerAirbnbCard() {
     Card(modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 8.dp), shape = RoundedCornerShape(24.dp)) {
         Box(Modifier.fillMaxWidth().height(200.dp).background(Color.LightGray.copy(alpha = 0.5f)))
+    }
+}
+
+@Preview(showBackground = true)
+@Composable
+fun ExploreScreenPreview() {
+    ModiTheme {
+        ExploreScreen()
+    }
+}
+
+@Preview(showBackground = true)
+@Composable
+fun AirbnbCardPreview() {
+    ModiTheme {
+        AirbnbCard(
+            property = Property(
+                title = "Luxury Penthouse",
+                locationName = "Kilimani, Nairobi",
+                price = 15000.0,
+                hostId = "123",
+                imageUrls = listOf("https://images.unsplash.com/photo-1512917774080-9991f1c4c750?auto=format&fit=crop&w=800&q=80")
+            ),
+            reviews = emptyList(),
+            onClick = {},
+            onLikeClick = {}
+        )
     }
 }

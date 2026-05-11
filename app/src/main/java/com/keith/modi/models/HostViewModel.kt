@@ -45,10 +45,14 @@ class HostViewModel : ViewModel() {
     private val _totalEarnings = MutableStateFlow(0.0)
     val totalEarnings: StateFlow<Double> = _totalEarnings.asStateFlow()
 
+    private val _categories = MutableStateFlow<List<Category>>(emptyList())
+    val categories: StateFlow<List<Category>> = _categories.asStateFlow()
+
     init {
         fetchMyProperties()
         fetchStats()
         setupRealtime()
+        fetchCategories()
     }
 
     private fun setupRealtime() {
@@ -65,6 +69,48 @@ class HostViewModel : ViewModel() {
                 channel.subscribe()
             } catch (e: Exception) {
                 // Realtime failed
+            }
+        }
+    }
+
+    fun fetchCategories() {
+        viewModelScope.launch {
+            try {
+                val cats = Supabase.client.postgrest["categories"]
+                    .select()
+                    .decodeList<Category>()
+                _categories.value = cats
+            } catch (e: Exception) {
+                // Fallback if table doesn't exist yet or error
+                _categories.value = listOf(
+                    Category(name = "Nearby"),
+                    Category(name = "Beachfront"),
+                    Category(name = "Pool"),
+                    Category(name = "Luxury"),
+                    Category(name = "Modern"),
+                    Category(name = "WiFi"),
+                    Category(name = "Central"),
+                    Category(name = "Cabins")
+                )
+            }
+        }
+    }
+
+    fun addCategory(name: String) {
+        val sanitized = name.trim().replaceFirstChar { it.uppercase() }
+        if (sanitized.isBlank()) return
+        
+        viewModelScope.launch {
+            try {
+                // Check if exists
+                val exists = _categories.value.any { it.name.equals(sanitized, ignoreCase = true) }
+                if (!exists) {
+                    val newCat = Category(name = sanitized, isVerified = false)
+                    Supabase.client.postgrest["categories"].insert(newCat)
+                    fetchCategories() // Refresh
+                }
+            } catch (e: Exception) {
+                // Handle error
             }
         }
     }
@@ -128,35 +174,44 @@ class HostViewModel : ViewModel() {
         viewModelScope.launch {
             _listingState.value = HostListingState.Loading
             try {
+                // PENDO: Structured concurrency ensures that if one upload fails, everything is caught and handled.
                 val userId = Supabase.client.auth.currentUserOrNull()?.id
                     ?: throw Exception("User not authenticated")
 
                 val tags = mutableSetOf<String>()
                 tags.addAll(categories)
                 
-                val imageUrls = imageUris.map { uri ->
-                    async {
-                        val result = CloudinaryHelper.uploadImage(context, uri, "properties")
-                        
-                        val info = result["info"] as? Map<*, *>
-                        val categorization = info?.get("categorization") as? Map<*, *>
-                        val googleTagging = categorization?.get("google_tagging") as? Map<*, *>
-                        val detectedTags = googleTagging?.get("data") as? List<*>
-                        
-                        detectedTags?.forEach { tag ->
-                            val tagMap = tag as? Map<*, *>
-                            val tagName = tagMap?.get("tag") as? String
-                            val confidence = (tagMap?.get("confidence") as? Number)?.toDouble() ?: 0.0
-                            if (tagName != null && confidence > 0.7) {
-                                synchronized(tags) {
-                                    tags.add(tagName)
+                // PENDO: Wrap async operations in a coroutineScope to catch child exceptions properly
+                val imageUrls = kotlinx.coroutines.coroutineScope {
+                    imageUris.map { uri ->
+                        async {
+                            val result = CloudinaryHelper.uploadImage(context, uri, "properties")
+                            
+                            // Safe tag extraction
+                            try {
+                                val info = result["info"] as? Map<*, *>
+                                val categorization = info?.get("categorization") as? Map<*, *>
+                                val googleTagging = categorization?.get("google_tagging") as? Map<*, *>
+                                val detectedTags = googleTagging?.get("data") as? List<*>
+                                
+                                detectedTags?.forEach { tag ->
+                                    val tagMap = tag as? Map<*, *>
+                                    val tagName = tagMap?.get("tag") as? String
+                                    val confidence = (tagMap?.get("confidence") as? Number)?.toDouble() ?: 0.0
+                                    if (tagName != null && confidence > 0.7) {
+                                        synchronized(tags) {
+                                            tags.add(tagName)
+                                        }
+                                    }
                                 }
+                            } catch (e: Exception) {
+                                // PENDO: Don't fail the whole upload if just tagging fails
                             }
-                        }
 
-                        result["secure_url"] as String
-                    }
-                }.awaitAll()
+                            (result["secure_url"] as? String) ?: throw Exception("Failed to retrieve secure URL from Cloudinary")
+                        }
+                    }.awaitAll()
+                }
 
                 val enrichedDescription = if (tags.isNotEmpty()) {
                     "$description\n\n#${tags.joinToString(" #")}"
@@ -165,13 +220,12 @@ class HostViewModel : ViewModel() {
                 }
 
                 val newProperty = Property(
-                    id = UUID.randomUUID().toString(),
+                    id = java.util.UUID.randomUUID().toString(),
                     hostId = userId,
                     title = name,
                     description = enrichedDescription,
                     price = price,
                     locationName = location,
-                    distanceKm = 0.0,
                     imageUrls = imageUrls,
                     latitude = latitude,
                     longitude = longitude,
@@ -185,7 +239,10 @@ class HostViewModel : ViewModel() {
                 
                 _myProperties.value += newProperty
                 _listingState.value = HostListingState.Success
-            } catch (e: Exception) {
+            } catch (e: Throwable) {
+                // PENDO: Explicitly handle CancellationException to avoid overriding it
+                if (e is kotlinx.coroutines.CancellationException) throw e
+
                 _listingState.value = HostListingState.Error(ErrorUtils.sanitizeError(e))
             }
         }

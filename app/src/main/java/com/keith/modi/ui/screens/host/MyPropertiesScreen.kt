@@ -30,6 +30,8 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.compose.ui.tooling.preview.Preview
+import com.keith.modi.ui.theme.ModiTheme
 import androidx.lifecycle.viewmodel.compose.viewModel
 import coil.compose.AsyncImage
 import com.keith.modi.models.HostListingState
@@ -43,111 +45,127 @@ fun MyPropertiesScreen(hostViewModel: HostViewModel = viewModel()) {
     val myProperties by hostViewModel.myProperties.collectAsState()
     val listingState by hostViewModel.listingState.collectAsState()
     var propertyToDelete by remember { mutableStateOf<Property?>(null) }
+    var propertyToEdit by remember { mutableStateOf<Property?>(null) }
+    var showAddWizard by remember { mutableStateOf(false) }
     
     val snackbarHostState = remember { SnackbarHostState() }
     val scope = rememberCoroutineScope()
     
     var isRefreshing by remember { mutableStateOf(false) }
 
-    Scaffold(
-        snackbarHost = { SnackbarHost(snackbarHostState) },
-        topBar = {
-            CenterAlignedTopAppBar(
-                title = { 
-                    Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                        Text("My Listings", fontWeight = FontWeight.ExtraBold, style = MaterialTheme.typography.titleLarge)
-                        Text("${myProperties.size} total properties", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.secondary)
+    if (showAddWizard) {
+        ListAirbnbScreen(
+            onBack = { showAddWizard = false },
+            hostViewModel = hostViewModel
+        )
+    } else if (propertyToEdit != null) {
+        ListAirbnbScreen(
+            onBack = { propertyToEdit = null },
+            hostViewModel = hostViewModel,
+            initialProperty = propertyToEdit
+        )
+    } else {
+        Scaffold(
+            snackbarHost = { SnackbarHost(snackbarHostState) },
+            topBar = {
+                CenterAlignedTopAppBar(
+                    title = { 
+                        Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                            Text("My Listings", fontWeight = FontWeight.ExtraBold, style = MaterialTheme.typography.titleLarge)
+                            Text("${myProperties.size} total properties", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.secondary)
+                        }
+                    },
+                    colors = TopAppBarDefaults.centerAlignedTopAppBarColors(
+                        containerColor = MaterialTheme.colorScheme.background,
+                        titleContentColor = MaterialTheme.colorScheme.onBackground
+                    )
+                )
+            }
+        ) { padding ->
+            PullToRefreshBox(
+                isRefreshing = isRefreshing,
+                onRefresh = {
+                    scope.launch {
+                        isRefreshing = true
+                        hostViewModel.fetchMyProperties()
+                        isRefreshing = false
                     }
                 },
-                colors = TopAppBarDefaults.centerAlignedTopAppBarColors(
-                    containerColor = MaterialTheme.colorScheme.background,
-                    titleContentColor = MaterialTheme.colorScheme.onBackground
-                )
-            )
-        }
-    ) { padding ->
-        PullToRefreshBox(
-            isRefreshing = isRefreshing,
-            onRefresh = {
-                scope.launch {
-                    isRefreshing = true
-                    hostViewModel.fetchMyProperties()
-                    isRefreshing = false
-                }
-            },
-            modifier = Modifier.padding(padding)
-        ) {
-            if (myProperties.isEmpty() && listingState !is HostListingState.Loading) {
-                Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                    Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                        Surface(
-                            modifier = Modifier.size(80.dp),
-                            shape = CircleShape,
-                            color = MaterialTheme.colorScheme.surfaceVariant
-                        ) {
-                            Icon(
-                                Icons.Default.Warning, 
-                                contentDescription = null, 
-                                modifier = Modifier.padding(20.dp),
-                                tint = MaterialTheme.colorScheme.secondary
-                            )
-                        }
-                        Spacer(modifier = Modifier.height(16.dp))
-                        Text("You haven't listed any properties yet.", color = MaterialTheme.colorScheme.secondary)
-                        TextButton(onClick = { /* Navigate to add */ }) {
-                            Text("Create your first listing")
+                modifier = Modifier.padding(padding)
+            ) {
+                if (myProperties.isEmpty() && listingState !is HostListingState.Loading) {
+                    Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                        Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                            Surface(
+                                modifier = Modifier.size(80.dp),
+                                shape = CircleShape,
+                                color = MaterialTheme.colorScheme.surfaceVariant
+                            ) {
+                                Icon(
+                                    Icons.Default.Warning, 
+                                    contentDescription = null, 
+                                    modifier = Modifier.padding(20.dp),
+                                    tint = MaterialTheme.colorScheme.secondary
+                                )
+                            }
+                            Spacer(modifier = Modifier.height(16.dp))
+                            Text("You haven't listed any properties yet.", color = MaterialTheme.colorScheme.secondary)
+                            TextButton(onClick = { showAddWizard = true }) {
+                                Text("Create your first airbnb")
+                            }
                         }
                     }
-                }
-            } else {
-                LazyColumn(
-                    modifier = Modifier.fillMaxSize(),
-                    contentPadding = PaddingValues(16.dp),
-                    verticalArrangement = Arrangement.spacedBy(20.dp)
-                ) {
-                    items(myProperties, key = { it.id ?: "" }) { property ->
-                        AnimatedVisibility(
-                            visible = true,
-                            enter = fadeIn() + expandVertically(),
-                            exit = fadeOut() + shrinkVertically()
-                        ) {
-                            ManagedPropertyCard(
-                                property = property,
-                                hostViewModel = hostViewModel,
-                                onDelete = { propertyToDelete = property }
-                            )
+                } else {
+                    LazyColumn(
+                        modifier = Modifier.fillMaxSize(),
+                        contentPadding = PaddingValues(16.dp),
+                        verticalArrangement = Arrangement.spacedBy(20.dp)
+                    ) {
+                        items(myProperties, key = { it.id ?: "" }) { property ->
+                            AnimatedVisibility(
+                                visible = true,
+                                enter = fadeIn() + expandVertically(),
+                                exit = fadeOut() + shrinkVertically()
+                            ) {
+                                ManagedPropertyCard(
+                                    property = property,
+                                    hostViewModel = hostViewModel,
+                                    onEdit = { propertyToEdit = property },
+                                    onDelete = { propertyToDelete = property }
+                                )
+                            }
                         }
                     }
                 }
             }
-        }
 
-        if (propertyToDelete != null) {
-            AlertDialog(
-                onDismissRequest = { propertyToDelete = null },
-                icon = { Icon(Icons.Default.Delete, null, tint = MaterialTheme.colorScheme.error) },
-                title = { Text("Delete Listing") },
-                text = { Text("Are you sure you want to delete '${propertyToDelete?.title}'? This action cannot be undone and will remove all associated data.") },
-                confirmButton = {
-                    Button(
-                        onClick = {
-                            propertyToDelete?.id?.let { hostViewModel.deleteProperty(it) }
-                            scope.launch {
-                                snackbarHostState.showSnackbar("Listing deleted successfully")
-                            }
-                            propertyToDelete = null
-                        },
-                        colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.error)
-                    ) {
-                        Text("Delete")
+            if (propertyToDelete != null) {
+                AlertDialog(
+                    onDismissRequest = { propertyToDelete = null },
+                    icon = { Icon(Icons.Default.Delete, null, tint = MaterialTheme.colorScheme.error) },
+                    title = { Text("Delete Listing") },
+                    text = { Text("Are you sure you want to delete '${propertyToDelete?.title}'? This action cannot be undone and will remove all associated data.") },
+                    confirmButton = {
+                        Button(
+                            onClick = {
+                                propertyToDelete?.id?.let { hostViewModel.deleteProperty(it) }
+                                scope.launch {
+                                    snackbarHostState.showSnackbar("Listing deleted successfully")
+                                }
+                                propertyToDelete = null
+                            },
+                            colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.error)
+                        ) {
+                            Text("Delete")
+                        }
+                    },
+                    dismissButton = {
+                        TextButton(onClick = { propertyToDelete = null }) {
+                            Text("Cancel")
+                        }
                     }
-                },
-                dismissButton = {
-                    TextButton(onClick = { propertyToDelete = null }) {
-                        Text("Cancel")
-                    }
-                }
-            )
+                )
+            }
         }
     }
 }
@@ -156,6 +174,7 @@ fun MyPropertiesScreen(hostViewModel: HostViewModel = viewModel()) {
 fun ManagedPropertyCard(
     property: Property,
     hostViewModel: HostViewModel,
+    onEdit: () -> Unit,
     onDelete: () -> Unit
 ) {
     Card(
@@ -247,7 +266,7 @@ fun ManagedPropertyCard(
                 
                 Row {
                     FilledTonalIconButton(
-                        onClick = { /* Edit */ },
+                        onClick = onEdit,
                         modifier = Modifier.size(40.dp)
                     ) {
                         Icon(
@@ -328,5 +347,33 @@ fun ManagedPropertyCard(
             }
             Spacer(modifier = Modifier.height(16.dp))
         }
+    }
+}
+
+@Preview(showBackground = true)
+@Composable
+fun MyPropertiesScreenPreview() {
+    ModiTheme {
+        MyPropertiesScreen()
+    }
+}
+
+@Preview(showBackground = true)
+@Composable
+fun ManagedPropertyCardPreview() {
+    ModiTheme {
+        ManagedPropertyCard(
+            property = Property(
+                id = "1",
+                title = "Modern Loft",
+                locationName = "Nairobi",
+                price = 5000.0,
+                hostId = "host1",
+                imageUrls = listOf("https://images.unsplash.com/photo-1512917774080-9991f1c4c750?auto=format&fit=crop&w=800&q=80")
+            ),
+            hostViewModel = viewModel(),
+            onEdit = {},
+            onDelete = {}
+        )
     }
 }

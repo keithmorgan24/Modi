@@ -17,26 +17,46 @@ object CloudinaryHelper {
      */
     suspend fun uploadImage(context: Context, imageUri: Uri, folder: String = "properties"): Map<*, *> {
         return suspendCancellableCoroutine { continuation ->
-            // PENDO: Using UNSIGNED uploads for security.
-            // Create a preset in your Cloudinary Dashboard with detected tags enabled.
-            MediaManager.get().upload(imageUri)
-                .option("upload_preset", "modi_unsigned_preset") 
-                .option("folder", "modi/$folder")
-                .option("resource_type", "image")
-                .callback(object : UploadCallback {
-                    override fun onStart(requestId: String) {}
-                    override fun onProgress(requestId: String, bytes: Long, totalBytes: Long) {}
-                    
-                    override fun onSuccess(requestId: String, resultData: Map<*, *>) {
-                        continuation.resume(resultData)
-                    }
+            try {
+                // PENDO: Safety check to prevent IllegalStateException if init failed
+                val manager = try { MediaManager.get() } catch (e: Exception) { null }
+                if (manager == null) {
+                    continuation.resumeWithException(Exception("Cloudinary not initialized. Check your API keys."))
+                    return@suspendCancellableCoroutine
+                }
 
-                    override fun onError(requestId: String, error: ErrorInfo) {
-                        continuation.resumeWithException(Exception("Cloudinary Error: ${error.description}"))
-                    }
+                manager.upload(imageUri)
+                    .unsigned("modi_unsigned_preset")
+                    .option("folder", "modi/$folder")
+                    .option("resource_type", "image")
+                    .callback(object : UploadCallback {
+                        override fun onStart(requestId: String) {}
+                        override fun onProgress(requestId: String, bytes: Long, totalBytes: Long) {}
+                        
+                        override fun onSuccess(requestId: String, resultData: Map<*, *>) {
+                            if (!continuation.isCompleted) {
+                                continuation.resume(resultData)
+                            }
+                        }
 
-                    override fun onReschedule(requestId: String, error: ErrorInfo) {}
-                }).dispatch()
+                        override fun onError(requestId: String, error: ErrorInfo) {
+                            if (!continuation.isCompleted) {
+                                continuation.resumeWithException(Exception("Cloudinary Error: ${error.description}"))
+                            }
+                        }
+
+                        override fun onReschedule(requestId: String, error: ErrorInfo) {
+                            // PENDO: Handle recoverable network errors by failing fast for the UI
+                            if (!continuation.isCompleted) {
+                                continuation.resumeWithException(Exception("Upload rescheduled: ${error.description}"))
+                            }
+                        }
+                    }).dispatch()
+            } catch (e: Exception) {
+                if (!continuation.isCompleted) {
+                    continuation.resumeWithException(e)
+                }
+            }
         }
     }
 }

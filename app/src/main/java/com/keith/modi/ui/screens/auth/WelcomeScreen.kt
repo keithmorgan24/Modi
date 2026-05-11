@@ -15,6 +15,9 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 
+import androidx.compose.ui.tooling.preview.Preview
+import com.keith.modi.ui.theme.ModiTheme
+
 @Composable
 fun WelcomeScreen(
     onLogin: () -> Unit,
@@ -80,5 +83,13 @@ fun WelcomeScreen(
         }
 
         Spacer(modifier = Modifier.height(48.dp))
+    }
+}
+
+@Preview(showSystemUi = true)
+@Composable
+fun WelcomeScreenPreview() {
+    ModiTheme {
+        WelcomeScreen(onLogin = {}, onSignUp = {}, onGuest = {})
     }
 }

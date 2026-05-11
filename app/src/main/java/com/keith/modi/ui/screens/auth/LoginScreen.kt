@@ -391,3 +391,19 @@ fun RoleCard(
         }
     }
 }
+
+@Preview(showSystemUi = true)
+@Composable
+fun LoginScreenPreview() {
+    ModiTheme {
+        LoginScreen()
+    }
+}
+
+@Preview(showSystemUi = true)
+@Composable
+fun SignUpScreenPreview() {
+    ModiTheme {
+        LoginScreen(isSignUpInitial = true)
+    }
+}

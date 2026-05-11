@@ -216,13 +216,15 @@ fun ProfileContent(
                     onClick = { handleAction("edit_profile") }
                 )
                 
-                ProfileMenuItem(
-                    icon = if (currentRole == UserRole.CUSTOMER) Icons.Default.AddBusiness else Icons.Default.Explore,
-                    title = if (currentRole == UserRole.CUSTOMER) "Switch to Hosting" else "Switch to Exploring",
-                    subtitle = if (currentRole == UserRole.CUSTOMER) "List your own spaces" else "Find your next stay",
-                    onClick = { if (isGuest) showAuthDialog = true else onToggleRole() },
-                    tint = MaterialTheme.colorScheme.primary
-                )
+                if (profile?.role == "HOST") {
+                    ProfileMenuItem(
+                        icon = if (currentRole == UserRole.CUSTOMER) Icons.Default.AddBusiness else Icons.Default.Explore,
+                        title = if (currentRole == UserRole.CUSTOMER) "Switch to Hosting" else "Switch to Exploring",
+                        subtitle = if (currentRole == UserRole.CUSTOMER) "List your own spaces" else "Find your next stay",
+                        onClick = { if (isGuest) showAuthDialog = true else onToggleRole() },
+                        tint = MaterialTheme.colorScheme.primary
+                    )
+                }
             }
         }
 

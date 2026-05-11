@@ -23,9 +23,14 @@ object ErrorUtils {
             message.contains("User already registered", ignoreCase = true) -> "This email is already registered. Please login instead."
             message.contains("Email address already exists", ignoreCase = true) -> "This email is already in use. Try a different one."
 
+            // PENDO: Infrastructure Errors
+            message.contains("Cloudinary", ignoreCase = true) -> "Media Upload Failed: ${message.substringAfter("Cloudinary Error: ").substringBefore("\n")}"
+            message.contains("User not authenticated", ignoreCase = true) -> "Session expired. Please log in again."
+            message.contains("403", ignoreCase = true) -> "Permission Denied (403). Check database RLS policies."
+
             // PENDO: Trace debugging - Shield technical leaks (URLs/Tokens)
             else -> {
-                "Authentication error. Please ensure your credentials are correct."
+                if (message.isNotBlank()) message else "An unexpected error occurred. Please try again."
             }
         }
     }

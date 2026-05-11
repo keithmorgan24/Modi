@@ -20,6 +20,14 @@ data class Profile(
 )
 
 @Serializable
+data class Category(
+    val id: Int? = null,
+    val name: String,
+    val icon: String? = null,
+    @SerialName("is_verified") val isVerified: Boolean = true
+)
+
+@Serializable
 data class Property(
     val id: String? = null,
     @SerialName("host_id") val hostId: String,
@@ -33,13 +41,12 @@ data class Property(
     @SerialName("created_at") val createdAt: String? = null,
     @SerialName("total_rooms") val totalRooms: Int = 1,
     @SerialName("occupied_rooms") val occupiedRooms: Int = 0,
+    val category: String = "Nearby",
+    val tags: List<String> = emptyList(),
     
-    // PENDO: These fields are now transient to match your 10-column Supabase schema
-    // This prevents "400 Bad Request" errors during publishing.
+    // PENDO: These fields remain transient/calculated
     @kotlinx.serialization.Transient val rating: Double = 4.5,
     @kotlinx.serialization.Transient val distanceKm: Double = 0.0,
-    @kotlinx.serialization.Transient val category: String = "Nearby",
-    @kotlinx.serialization.Transient val tags: List<String> = emptyList(),
     @kotlinx.serialization.Transient val isLiked: Boolean = false
 ) {
     val isFull: Boolean get() = occupiedRooms >= totalRooms

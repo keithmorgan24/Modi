@@ -23,6 +23,9 @@ import com.keith.modi.models.AuthViewModel
 import com.keith.modi.models.AuthState
 import com.keith.modi.utils.ValidationUtils
 
+import androidx.compose.ui.tooling.preview.Preview
+import com.keith.modi.ui.theme.ModiTheme
+
 @Composable
 fun ResetPasswordScreen(
     onComplete: () -> Unit,
@@ -122,5 +125,13 @@ fun ResetPasswordScreen(
                 Text("Update Complete. Tap to continue home →", color = Color(0xFF2E7D32))
             }
         }
+    }
+}
+
+@Preview(showBackground = true)
+@Composable
+fun ResetPasswordScreenPreview() {
+    ModiTheme {
+        ResetPasswordScreen(onComplete = {})
     }
 }
