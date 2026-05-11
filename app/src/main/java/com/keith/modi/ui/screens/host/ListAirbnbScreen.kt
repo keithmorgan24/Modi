@@ -57,7 +57,8 @@ fun ListAirbnbScreen(
     hostViewModel: HostViewModel = viewModel(),
     initialProperty: com.keith.modi.models.Property? = null
 ) {
-    var currentStep by remember { mutableIntStateOf(0) }
+    val isEditing = initialProperty != null
+    var currentStep by remember { mutableIntStateOf(if (isEditing) 1 else 0) }
     val totalSteps = 9
     
     val snackbarHostState = remember { SnackbarHostState() }
@@ -79,7 +80,6 @@ fun ListAirbnbScreen(
     val listingState by hostViewModel.listingState.collectAsState()
     val backendCategories by hostViewModel.categories.collectAsState()
     
-    val isEditing = initialProperty != null
     var showSuccessDialog by remember { mutableStateOf(false) }
     var showAddCategoryDialog by remember { mutableStateOf(false) }
     var newCategoryName by remember { mutableStateOf("") }
@@ -201,7 +201,7 @@ fun ListAirbnbScreen(
                     label = "stepTransition"
                 ) { step ->
                     when (step) {
-                        0 -> WelcomeStep { currentStep = 1 }
+                        0 -> WelcomeStep(isEditing) { currentStep = 1 }
                         1 -> SimpleInputStep(
                             title = "What's the name of your beautiful space? 🏠",
                             description = "Guests usually look for catchy titles like 'Serene Garden Cottage'.",
@@ -300,7 +300,9 @@ fun ListAirbnbScreen(
                                         description = description,
                                         price = priceVal,
                                         location = locationName,
-                                        category = selectedCategories.firstOrNull() ?: "Nearby"
+                                        category = selectedCategories.firstOrNull() ?: "Nearby",
+                                        totalRooms = roomsVal,
+                                        tags = selectedCategories.toList()
                                     )
                                     // PENDO: Trigger success manually for edit
                                     scope.launch {
@@ -366,16 +368,22 @@ private fun getValidationError(step: Int, name: String, location: String, price:
 }
 
 @Composable
-fun WelcomeStep(onStart: () -> Unit) {
+fun WelcomeStep(isEditing: Boolean, onStart: () -> Unit) {
     Column(
         modifier = Modifier.fillMaxSize(),
         horizontalAlignment = Alignment.CenterHorizontally,
         verticalArrangement = Arrangement.Center
     ) {
-        Text("Ready to become a host? 🌟", style = MaterialTheme.typography.headlineMedium, fontWeight = FontWeight.Bold, textAlign = TextAlign.Center)
+        Text(
+            if (isEditing) "Update your listing 📝" else "Ready to become a host? 🌟",
+            style = MaterialTheme.typography.headlineMedium,
+            fontWeight = FontWeight.Bold,
+            textAlign = TextAlign.Center
+        )
         Spacer(modifier = Modifier.height(16.dp))
         Text(
-            "We'll guide you through listing your space in a few simple steps. It's easy, and we're here to help!",
+            if (isEditing) "Modify your space's details to keep guests informed and attract more bookings!"
+            else "We'll guide you through listing your space in a few simple steps. It's easy, and we're here to help!",
             style = MaterialTheme.typography.bodyLarge,
             textAlign = TextAlign.Center,
             color = MaterialTheme.colorScheme.secondary
@@ -386,7 +394,7 @@ fun WelcomeStep(onStart: () -> Unit) {
             modifier = Modifier.fillMaxWidth().height(56.dp),
             shape = RoundedCornerShape(16.dp)
         ) {
-            Text("Let's Get Started! 🚀", fontWeight = FontWeight.Bold)
+            Text(if (isEditing) "Let's Edit! ✍️" else "Let's Get Started! 🚀", fontWeight = FontWeight.Bold)
         }
     }
 }

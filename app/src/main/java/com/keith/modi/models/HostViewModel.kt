@@ -12,6 +12,10 @@ import io.github.jan.supabase.postgrest.postgrest
 import io.github.jan.supabase.realtime.realtime
 import io.github.jan.supabase.realtime.channel
 import io.github.jan.supabase.realtime.postgresListDataFlow
+import kotlinx.serialization.json.add
+import kotlinx.serialization.json.buildJsonObject
+import kotlinx.serialization.json.put
+import kotlinx.serialization.json.putJsonArray
 import kotlinx.coroutines.async
 import kotlinx.coroutines.awaitAll
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -300,17 +304,25 @@ class HostViewModel : ViewModel() {
         description: String,
         price: Double,
         location: String,
-        category: String
+        category: String,
+        totalRooms: Int,
+        tags: List<String>
     ) {
         viewModelScope.launch {
+            _listingState.value = HostListingState.Loading
             try {
-                val updates = mapOf(
-                    "title" to name,
-                    "description" to description,
-                    "price_per_night" to price,
-                    "location_name" to location,
-                    "category" to category
-                )
+                val updates = buildJsonObject {
+                    put("title", name)
+                    put("description", description)
+                    put("price_per_night", price)
+                    put("location_name", location)
+                    put("category", category)
+                    put("total_rooms", totalRooms)
+                    putJsonArray("tags") {
+                        tags.forEach { tag -> add(tag) }
+                    }
+                }
+
                 Supabase.client.postgrest["properties"].update(updates) {
                     filter { eq("id", id) }
                 }
@@ -320,10 +332,14 @@ class HostViewModel : ViewModel() {
                         description = description,
                         price = price,
                         locationName = location,
-                        category = category
+                        category = category,
+                        totalRooms = totalRooms,
+                        tags = tags
                     ) else it
                 }
+                _listingState.value = HostListingState.Success
             } catch (e: Exception) {
+                _listingState.value = HostListingState.Error(ErrorUtils.sanitizeError(e))
             }
         }
     }

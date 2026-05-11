@@ -11,6 +11,7 @@ import androidx.compose.material.icons.automirrored.filled.TrendingUp
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.AttachMoney
 import androidx.compose.material.icons.filled.Notifications
+import androidx.compose.material.icons.filled.Check
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -41,8 +42,8 @@ fun HostDashboardScreen(hostViewModel: HostViewModel = viewModel()) {
     } else if (showBookingRequests) {
         Scaffold(
             topBar = {
-                TopAppBar(
-                    title = { Text("Booking Requests") },
+                CenterAlignedTopAppBar(
+                    title = { Text("Booking Requests", fontWeight = FontWeight.ExtraBold) },
                     navigationIcon = {
                         IconButton(onClick = { showBookingRequests = false }) {
                             Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back")
@@ -55,13 +56,26 @@ fun HostDashboardScreen(hostViewModel: HostViewModel = viewModel()) {
                 modifier = Modifier
                     .fillMaxSize()
                     .padding(innerPadding)
-                    .padding(16.dp),
-                verticalArrangement = Arrangement.spacedBy(16.dp)
+                    .padding(horizontal = 16.dp),
+                verticalArrangement = Arrangement.spacedBy(20.dp),
+                contentPadding = PaddingValues(top = 16.dp, bottom = 32.dp)
             ) {
                 if (pendingBookings.isEmpty()) {
                     item {
-                        Box(modifier = Modifier.fillParentMaxSize(), contentAlignment = Alignment.Center) {
-                            Text("No pending requests")
+                        Box(
+                            modifier = Modifier.fillParentMaxSize(),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                                Icon(
+                                    Icons.Default.Notifications, 
+                                    contentDescription = null, 
+                                    modifier = Modifier.size(64.dp),
+                                    tint = MaterialTheme.colorScheme.surfaceVariant
+                                )
+                                Spacer(modifier = Modifier.height(16.dp))
+                                Text("No pending requests", color = MaterialTheme.colorScheme.secondary)
+                            }
                         }
                     }
                 } else {
@@ -69,15 +83,19 @@ fun HostDashboardScreen(hostViewModel: HostViewModel = viewModel()) {
                         val property = booking.property
                         Card(
                             modifier = Modifier.fillMaxWidth(),
-                            shape = RoundedCornerShape(24.dp),
-                            colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f))
+                            shape = RoundedCornerShape(28.dp),
+                            colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
+                            elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
                         ) {
-                            Column(modifier = Modifier.padding(16.dp)) {
-                                Row(verticalAlignment = Alignment.CenterVertically) {
+                            Column(modifier = Modifier.padding(20.dp)) {
+                                Row(
+                                    verticalAlignment = Alignment.CenterVertically,
+                                    modifier = Modifier.fillMaxWidth()
+                                ) {
                                     Surface(
-                                        modifier = Modifier.size(60.dp),
-                                        shape = RoundedCornerShape(12.dp),
-                                        color = MaterialTheme.colorScheme.surface
+                                        modifier = Modifier.size(70.dp),
+                                        shape = RoundedCornerShape(16.dp),
+                                        color = MaterialTheme.colorScheme.surfaceVariant
                                     ) {
                                         if (property?.imageUrls?.isNotEmpty() == true) {
                                             coil.compose.AsyncImage(
@@ -90,27 +108,40 @@ fun HostDashboardScreen(hostViewModel: HostViewModel = viewModel()) {
                                             Icon(
                                                 Icons.Default.Notifications,
                                                 contentDescription = null,
-                                                modifier = Modifier.padding(12.dp),
+                                                modifier = Modifier.padding(16.dp),
                                                 tint = MaterialTheme.colorScheme.primary
                                             )
                                         }
                                     }
                                     Spacer(modifier = Modifier.width(16.dp))
-                                    Column {
+                                    Column(modifier = Modifier.weight(1f)) {
                                         Text(
                                             text = property?.title ?: "Unknown Property",
-                                            style = MaterialTheme.typography.titleMedium,
+                                            style = MaterialTheme.typography.titleLarge,
                                             fontWeight = FontWeight.Bold
                                         )
                                         Text(
                                             "Guest ID: ${booking.guestId.take(8)}",
-                                            style = MaterialTheme.typography.bodySmall,
+                                            style = MaterialTheme.typography.bodyMedium,
                                             color = MaterialTheme.colorScheme.onSurfaceVariant
+                                        )
+                                    }
+                                    
+                                    Surface(
+                                        shape = RoundedCornerShape(12.dp),
+                                        color = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.5f)
+                                    ) {
+                                        Text(
+                                            "PENDING",
+                                            modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp),
+                                            style = MaterialTheme.typography.labelSmall,
+                                            fontWeight = FontWeight.Bold,
+                                            color = MaterialTheme.colorScheme.primary
                                         )
                                     }
                                 }
                                 
-                                Spacer(modifier = Modifier.height(16.dp))
+                                Spacer(modifier = Modifier.height(24.dp))
                                 
                                 Row(
                                     modifier = Modifier.fillMaxWidth(),
@@ -118,17 +149,27 @@ fun HostDashboardScreen(hostViewModel: HostViewModel = viewModel()) {
                                 ) {
                                     Button(
                                         onClick = { hostViewModel.approveBooking(booking.id!!) },
-                                        modifier = Modifier.weight(1f),
-                                        shape = RoundedCornerShape(12.dp)
+                                        modifier = Modifier.weight(1f).height(50.dp),
+                                        shape = RoundedCornerShape(14.dp),
+                                        colors = ButtonDefaults.buttonColors(
+                                            containerColor = MaterialTheme.colorScheme.primary
+                                        )
                                     ) {
-                                        Text("Approve")
+                                        Icon(Icons.Default.Check, contentDescription = null, modifier = Modifier.size(18.dp))
+                                        Spacer(modifier = Modifier.width(8.dp))
+                                        Text("Approve", fontWeight = FontWeight.Bold)
                                     }
+                                    
                                     OutlinedButton(
                                         onClick = { hostViewModel.rejectBooking(booking.id!!) },
-                                        modifier = Modifier.weight(1f),
-                                        shape = RoundedCornerShape(12.dp)
+                                        modifier = Modifier.weight(1f).height(50.dp),
+                                        shape = RoundedCornerShape(14.dp),
+                                        border = androidx.compose.foundation.BorderStroke(1.dp, MaterialTheme.colorScheme.error.copy(alpha = 0.5f)),
+                                        colors = ButtonDefaults.outlinedButtonColors(
+                                            contentColor = MaterialTheme.colorScheme.error
+                                        )
                                     ) {
-                                        Text("Reject")
+                                        Text("Reject", fontWeight = FontWeight.Bold)
                                     }
                                 }
                             }

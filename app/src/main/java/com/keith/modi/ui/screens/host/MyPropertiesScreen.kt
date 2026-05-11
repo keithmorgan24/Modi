@@ -2,19 +2,25 @@ package com.keith.modi.ui.screens.host
 
 import androidx.compose.animation.*
 import androidx.compose.animation.core.*
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.grid.GridCells
+import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
+import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.MoreVert
 import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.Remove
+import androidx.compose.material.icons.filled.RemoveCircle
 import androidx.compose.material.icons.filled.Warning
 import androidx.compose.material3.*
 import androidx.compose.material3.pulltorefresh.PullToRefreshBox
@@ -290,57 +296,79 @@ fun ManagedPropertyCard(
                 }
             }
 
-            // PENDO: Modern Inventory Management UI
+            // PENDO: Modern Inventory Management UI - Visual Room Grid
             Surface(
                 modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp).fillMaxWidth(),
-                shape = RoundedCornerShape(20.dp),
-                color = MaterialTheme.colorScheme.secondaryContainer.copy(alpha = 0.3f)
+                shape = RoundedCornerShape(24.dp),
+                color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.4f),
+                border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant)
             ) {
-                Row(
-                    modifier = Modifier.padding(12.dp).fillMaxWidth(),
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.SpaceBetween
-                ) {
-                    Column {
-                        Text("Inventory Status", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.primary)
-                        Text(
-                            if (property.isFull) "Fully Occupied" else "${property.vacantRooms} Rooms Available",
-                            style = MaterialTheme.typography.bodyMedium,
-                            fontWeight = FontWeight.Bold
-                        )
-                    }
-                    
+                Column(modifier = Modifier.padding(16.dp)) {
                     Row(
-                        verticalAlignment = Alignment.CenterVertically,
-                        modifier = Modifier.background(MaterialTheme.colorScheme.surface, RoundedCornerShape(12.dp)).padding(4.dp)
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
                     ) {
-                        IconButton(
-                            onClick = { 
-                                val newOccupied = (property.occupiedRooms - 1).coerceAtLeast(0)
-                                hostViewModel.updatePropertyOccupancy(property.id!!, newOccupied)
-                            },
-                            enabled = property.occupiedRooms > 0,
-                            modifier = Modifier.size(32.dp)
-                        ) {
-                            Icon(Icons.Default.Remove, null, modifier = Modifier.size(18.dp))
+                        Column {
+                            Text("Room Management", style = MaterialTheme.typography.labelLarge, color = MaterialTheme.colorScheme.primary, fontWeight = FontWeight.Bold)
+                            Text(
+                                if (property.isFull) "No Vacancy" else "${property.vacantRooms} of ${property.totalRooms} rooms free",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = if (property.isFull) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.onSurfaceVariant
+                            )
                         }
                         
-                        Text(
-                            "${property.occupiedRooms}", 
-                            modifier = Modifier.padding(horizontal = 12.dp),
-                            style = MaterialTheme.typography.titleMedium, 
-                            fontWeight = FontWeight.ExtraBold
-                        )
-                        
-                        IconButton(
-                            onClick = { 
-                                val newOccupied = (property.occupiedRooms + 1).coerceAtMost(property.totalRooms)
-                                hostViewModel.updatePropertyOccupancy(property.id!!, newOccupied)
-                            },
-                            enabled = property.occupiedRooms < property.totalRooms,
-                            modifier = Modifier.size(32.dp)
-                        ) {
-                            Icon(Icons.Default.Add, null, modifier = Modifier.size(18.dp))
+                        // Percentage Indicator
+                        val occupancyRate = (property.occupiedRooms.toFloat() / property.totalRooms.toFloat())
+                        Box(contentAlignment = Alignment.Center, modifier = Modifier.size(40.dp)) {
+                            CircularProgressIndicator(
+                                progress = { occupancyRate },
+                                modifier = Modifier.fillMaxSize(),
+                                strokeWidth = 4.dp,
+                                color = if (occupancyRate > 0.8f) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.primary,
+                                trackColor = MaterialTheme.colorScheme.surface
+                            )
+                            Text("${(occupancyRate * 100).toInt()}%", style = MaterialTheme.typography.labelSmall, fontWeight = FontWeight.Bold)
+                        }
+                    }
+                    
+                    Spacer(modifier = Modifier.height(16.dp))
+                    
+                    // Visual Room Grid: Tactile interactive control
+                    LazyVerticalGrid(
+                        columns = GridCells.Adaptive(minSize = 44.dp),
+                        modifier = Modifier.heightIn(max = 200.dp),
+                        horizontalArrangement = Arrangement.spacedBy(8.dp),
+                        verticalArrangement = Arrangement.spacedBy(8.dp),
+                        userScrollEnabled = false
+                    ) {
+                        items(property.totalRooms) { index ->
+                            val isOccupied = index < property.occupiedRooms
+                            val color = if (isOccupied) MaterialTheme.colorScheme.errorContainer else MaterialTheme.colorScheme.primaryContainer
+                            val icon = if (isOccupied) Icons.Default.RemoveCircle else Icons.Default.CheckCircle
+                            
+                            Surface(
+                                modifier = Modifier
+                                    .aspectRatio(1f)
+                                    .clickable {
+                                        // If user clicks an occupied room, mark it as vacant (reduce occupied count)
+                                        // and vice versa. This mimics individual room selection.
+                                        val newOccupied = if (isOccupied) property.occupiedRooms - 1 else property.occupiedRooms + 1
+                                        hostViewModel.updatePropertyOccupancy(property.id!!, newOccupied.coerceIn(0, property.totalRooms))
+                                    },
+                                shape = RoundedCornerShape(12.dp),
+                                color = color,
+                                border = if (isOccupied) null else BorderStroke(1.dp, MaterialTheme.colorScheme.primary.copy(alpha = 0.5f))
+                            ) {
+                                Box(contentAlignment = Alignment.Center) {
+                                    Icon(
+                                        icon, 
+                                        contentDescription = null, 
+                                        modifier = Modifier.size(20.dp),
+                                        tint = if (isOccupied) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.primary
+                                    )
+                                }
+                            }
                         }
                     }
                 }
