@@ -11,8 +11,10 @@ import io.github.jan.supabase.postgrest.Postgrest
 import io.github.jan.supabase.realtime.Realtime
 import io.github.jan.supabase.storage.Storage
 import io.github.jan.supabase.functions.Functions
+import io.ktor.client.engine.okhttp.OkHttp
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.encodeToString
+import com.keith.modi.BuildConfig
 
 object Supabase {
     private val SUPABASE_URL = BuildConfig.SUPABASE_URL
@@ -25,6 +27,7 @@ object Supabase {
             supabaseUrl = SUPABASE_URL,
             supabaseKey = SUPABASE_ANON_KEY
         ) {
+            httpEngine = OkHttp.create()
             install(Postgrest)
             install(Auth) {
                 sessionManager = SecureSessionManager(context)

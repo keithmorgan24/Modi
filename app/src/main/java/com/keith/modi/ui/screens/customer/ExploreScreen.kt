@@ -9,6 +9,7 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
@@ -34,6 +35,8 @@ import com.keith.modi.models.PropertyState
 import com.keith.modi.models.PropertyViewModel
 import com.keith.modi.models.Review
 import com.keith.modi.ui.theme.ModiTheme
+import com.keith.modi.ui.screens.customer.AirbnbCard
+import com.keith.modi.ui.screens.customer.ShimmerAirbnbCard
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 
@@ -269,29 +272,8 @@ fun BookingSheetContent(
 }
 
 @Composable
-fun AirbnbCard(property: Property, reviews: List<Review>, onClick: () -> Unit, onLikeClick: () -> Unit) {
-    Card(modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 8.dp).clickable { onClick() }, shape = RoundedCornerShape(24.dp)) {
-        Column {
-            AsyncImage(model = property.imageUrls.firstOrNull(), contentDescription = null, modifier = Modifier.fillMaxWidth().height(220.dp), contentScale = ContentScale.Crop)
-            Column(Modifier.padding(16.dp)) {
-                Text(property.title, style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
-                Text(property.locationName, color = MaterialTheme.colorScheme.secondary)
-                Text("Ksh ${property.price} / night", fontWeight = FontWeight.ExtraBold, color = MaterialTheme.colorScheme.primary, style = MaterialTheme.typography.headlineSmall)
-            }
-        }
-    }
-}
-
-@Composable
 fun FilterSheetContent(onApply: () -> Unit) {
     Button(onClick = onApply, modifier = Modifier.fillMaxWidth()) { Text("Apply Filters") }
-}
-
-@Composable
-fun ShimmerAirbnbCard() {
-    Card(modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 8.dp), shape = RoundedCornerShape(24.dp)) {
-        Box(Modifier.fillMaxWidth().height(200.dp).background(Color.LightGray.copy(alpha = 0.5f)))
-    }
 }
 
 @Preview(showBackground = true)

@@ -19,7 +19,11 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.launchIn
 import kotlinx.coroutines.flow.onEach
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.supervisorScope
 import java.util.UUID
+
+import io.github.jan.supabase.auth.status.SessionStatus
+import kotlinx.coroutines.flow.collectLatest
 
 sealed class PropertyState {
     object Loading : PropertyState()
@@ -41,7 +45,17 @@ class PropertyViewModel : ViewModel() {
 
     init {
         fetchProperties()
-        setupRealtime()
+        observeSessionForRealtime()
+    }
+
+    private fun observeSessionForRealtime() {
+        viewModelScope.launch {
+            Supabase.client.auth.sessionStatus.collectLatest { status ->
+                if (status is SessionStatus.Authenticated) {
+                    setupRealtime()
+                }
+            }
+        }
     }
 
     private fun setupRealtime() {
@@ -86,33 +100,52 @@ class PropertyViewModel : ViewModel() {
         viewModelScope.launch {
             _propertyState.value = PropertyState.Loading
             try {
-                val userId = Supabase.client.auth.currentUserOrNull()?.id
-                val propertiesDeferred = async { Supabase.client.postgrest["properties"].select().decodeList<Property>() }
-                val favoritesDeferred = async {
-                    if (userId != null) Supabase.client.postgrest["favorites"].select { filter { eq("user_id", userId) } }.decodeList<Favorite>()
-                    else emptyList<Favorite>()
+                // PENDO: Using supervisorScope prevents one failed child from cancelling the whole fetch
+                supervisorScope {
+                    val userId = Supabase.client.auth.currentUserOrNull()?.id
+                    
+                    val propertiesDeferred = async { 
+                        Supabase.client.postgrest["properties"].select().decodeList<Property>() 
+                    }
+                    
+                    val favoritesDeferred = async {
+                        try {
+                            if (userId != null) Supabase.client.postgrest["favorites"].select { filter { eq("user_id", userId) } }.decodeList<Favorite>()
+                            else emptyList<Favorite>()
+                        } catch (e: Exception) { emptyList<Favorite>() }
+                    }
+                    
+                    val bookingsDeferred = async {
+                        try {
+                            if (userId != null) Supabase.client.postgrest["bookings"].select(columns = Columns.raw("*, properties(*)")) { filter { eq("guest_id", userId) } }.decodeList<Booking>()
+                            else emptyList<Booking>()
+                        } catch (e: Exception) { emptyList<Booking>() }
+                    }
+                    
+                    val reviewsDeferred = async {
+                        try {
+                            Supabase.client.postgrest["reviews"].select().decodeList<Review>()
+                        } catch (e: Exception) { emptyList<Review>() }
+                    }
+
+                    // Await all results with fallback
+                    val properties = propertiesDeferred.await()
+                    val favorites = favoritesDeferred.await()
+                    val bookings = bookingsDeferred.await()
+                    val allReviews = reviewsDeferred.await()
+
+                    val reviewsByProperty = allReviews.groupBy { it.propertyId ?: "" }.filterKeys { it.isNotEmpty() }
+                    val updatedProperties = properties.map { p -> p.copy(isLiked = favorites.any { it.propertyId == p.id }) }
+
+                    _propertyState.value = PropertyState.Success(
+                        properties = updatedProperties, 
+                        favorites = favorites.map { it.propertyId }, 
+                        userBookings = bookings, 
+                        reviews = reviewsByProperty
+                    )
                 }
-                val bookingsDeferred = async {
-                    if (userId != null) Supabase.client.postgrest["bookings"].select(columns = Columns.raw("*, properties(*)")) { filter { eq("guest_id", userId) } }.decodeList<Booking>()
-                    else emptyList<Booking>()
-                }
-                val reviewsDeferred = async { Supabase.client.postgrest["reviews"].select().decodeList<Review>() }
-
-                val properties = propertiesDeferred.await()
-                val favorites = favoritesDeferred.await()
-                val bookings = bookingsDeferred.await()
-                val allReviews = reviewsDeferred.await()
-
-                val reviewsByProperty = allReviews.groupBy { it.propertyId ?: "" }.filterKeys { it.isNotEmpty() }
-                val updatedProperties = properties.map { p -> p.copy(isLiked = favorites.any { it.propertyId == p.id }) }
-
-                _propertyState.value = PropertyState.Success(
-                    properties = updatedProperties, 
-                    favorites = favorites.map { it.propertyId }, 
-                    userBookings = bookings, 
-                    reviews = reviewsByProperty
-                )
             } catch (e: Exception) {
+                // ErrorUtils will now rethrow CancellationException automatically
                 _propertyState.value = PropertyState.Error(ErrorUtils.sanitizeError(e))
             }
         }

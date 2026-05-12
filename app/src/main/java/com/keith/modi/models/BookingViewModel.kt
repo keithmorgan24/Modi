@@ -24,6 +24,9 @@ import kotlinx.coroutines.flow.launchIn
 import kotlinx.coroutines.flow.onEach
 import kotlinx.coroutines.launch
 
+import io.github.jan.supabase.auth.status.SessionStatus
+import kotlinx.coroutines.flow.collectLatest
+
 sealed class BookingState {
     object Loading : BookingState()
     data class Success(val bookings: List<Booking>) : BookingState()
@@ -36,11 +39,23 @@ class BookingViewModel : ViewModel() {
 
     init {
         fetchUserBookings()
-        setupRealtime()
+        observeSessionForRealtime()
     }
 
-    private fun setupRealtime() {
-        val user = Supabase.client.auth.currentUserOrNull() ?: return
+    private fun observeSessionForRealtime() {
+        viewModelScope.launch {
+            Supabase.client.auth.sessionStatus.collectLatest { status ->
+                if (status is SessionStatus.Authenticated) {
+                    val userId = status.session.user?.id
+                    if (userId != null) {
+                        setupRealtime(userId)
+                    }
+                }
+            }
+        }
+    }
+
+    private fun setupRealtime(userId: String) {
         viewModelScope.launch {
             try {
                 val channel = Supabase.client.channel("bookings-live")
@@ -54,13 +69,13 @@ class BookingViewModel : ViewModel() {
                         when (action) {
                             is PostgresAction.Insert -> {
                                 val newBooking = action.decodeRecord<Booking>()
-                                if (newBooking.guestId == user.id) {
+                                if (newBooking.guestId == userId) {
                                     fetchUserBookings() 
                                 }
                             }
                             is PostgresAction.Update -> {
                                 val updatedBooking = action.decodeRecord<Booking>()
-                                if (updatedBooking.guestId == user.id) {
+                                if (updatedBooking.guestId == userId) {
                                     val updatedList = currentState.bookings.map {
                                         if (it.id == updatedBooking.id) {
                                             updatedBooking.copy(property = it.property)
@@ -87,20 +102,31 @@ class BookingViewModel : ViewModel() {
             try {
                 val user = Supabase.client.auth.currentUserOrNull()
                 if (user != null) {
-                    val bookings = Supabase.client.postgrest["bookings"]
-                        .select(columns = Columns.raw("*, properties(*)")) {
-                            filter {
-                                eq("guest_id", user.id)
+                    val bookings = try {
+                        Supabase.client.postgrest["bookings"]
+                            .select(columns = Columns.raw("*, properties(*)")) {
+                                filter {
+                                    eq("guest_id", user.id)
+                                }
                             }
-                        }
-                        .decodeList<Booking>()
+                            .decodeList<Booking>()
+                    } catch (e: Exception) {
+                        // Fallback: If join fails, fetch bookings only to avoid crash
+                        Supabase.client.postgrest["bookings"]
+                            .select {
+                                filter {
+                                    eq("guest_id", user.id)
+                                }
+                            }
+                            .decodeList<Booking>()
+                    }
                     
                     _bookingState.value = BookingState.Success(bookings)
                 } else {
                     _bookingState.value = BookingState.Error("Please sign in to view your trips.")
                 }
             } catch (e: Exception) {
-                // PENDO SECURITY: Shield the user from sensitive technical leaks (Tokens/URLs)
+                // ErrorUtils will now rethrow CancellationException automatically
                 _bookingState.value = BookingState.Error(ErrorUtils.sanitizeError(e))
             }
         }

@@ -265,6 +265,13 @@ fun ProfileContent(
                     subtitle = "Get assistance and read FAQs",
                     onClick = { onNavigate("support") } // Support usually public
                 )
+
+                ProfileMenuItem(
+                    icon = Icons.Default.Share,
+                    title = "Share App",
+                    subtitle = "Invite friends to join Modi",
+                    onClick = { onNavigate("share_app") }
+                )
             }
         }
 

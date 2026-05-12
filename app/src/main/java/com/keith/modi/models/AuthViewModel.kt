@@ -251,27 +251,11 @@ class AuthViewModel : ViewModel() {
         viewModelScope.launch {
             _authState.value = AuthState.Loading
             try {
-                // PENDO SECURITY: Check if user exists in our profiles table first.
-                val exists = Supabase.client.postgrest["profiles"]
-                    .select {
-                        filter { eq("email", email) }
-                    }.decodeList<Profile>().isNotEmpty()
-                
-                if (!exists) {
-                    _authState.value = AuthState.Error("Invalid user. This email is not registered with Modi.")
-                    return@launch
-                }
-
+                // PENDO SECURITY: Generic response to prevent user enumeration
                 Supabase.client.auth.resetPasswordForEmail(email)
                 _authState.value = AuthState.PasswordResetRequested
             } catch (e: Exception) {
-                // PENDO: Fallback - Try to send anyway if profiles check fails (e.g. schema issues)
-                try {
-                    Supabase.client.auth.resetPasswordForEmail(email)
-                    _authState.value = AuthState.PasswordResetRequested
-                } catch (inner: Exception) {
-                    _authState.value = AuthState.Error(ErrorUtils.sanitizeError(inner))
-                }
+                _authState.value = AuthState.Error(ErrorUtils.sanitizeError(e))
             }
         }
     }

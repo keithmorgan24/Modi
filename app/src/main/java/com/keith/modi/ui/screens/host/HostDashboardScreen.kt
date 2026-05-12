@@ -21,6 +21,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.viewmodel.compose.viewModel
+import com.keith.modi.models.HostListingState
 import com.keith.modi.models.HostViewModel
 import com.keith.modi.ui.theme.ModiTheme
 
@@ -33,6 +34,19 @@ fun HostDashboardScreen(hostViewModel: HostViewModel = viewModel()) {
     val pendingCount by hostViewModel.pendingBookingsCount.collectAsState()
     val pendingBookings by hostViewModel.pendingBookings.collectAsState()
     val earnings by hostViewModel.totalEarnings.collectAsState()
+    val listingState by hostViewModel.listingState.collectAsState()
+    val snackbarHostState = remember { SnackbarHostState() }
+    val scope = rememberCoroutineScope()
+
+    LaunchedEffect(listingState) {
+        if (listingState is HostListingState.Success) {
+            snackbarHostState.showSnackbar("Action completed successfully! ✨")
+            hostViewModel.resetListingState()
+        } else if (listingState is HostListingState.Error) {
+            snackbarHostState.showSnackbar((listingState as HostListingState.Error).message)
+            hostViewModel.resetListingState()
+        }
+    }
 
     if (showListWizard) {
         ListAirbnbScreen(
@@ -41,6 +55,7 @@ fun HostDashboardScreen(hostViewModel: HostViewModel = viewModel()) {
         )
     } else if (showBookingRequests) {
         Scaffold(
+            snackbarHost = { SnackbarHost(snackbarHostState) },
             topBar = {
                 CenterAlignedTopAppBar(
                     title = { Text("Booking Requests", fontWeight = FontWeight.ExtraBold) },
@@ -147,22 +162,30 @@ fun HostDashboardScreen(hostViewModel: HostViewModel = viewModel()) {
                                     modifier = Modifier.fillMaxWidth(),
                                     horizontalArrangement = Arrangement.spacedBy(12.dp)
                                 ) {
+                                    val isLoading = listingState is HostListingState.Loading
+                                    
                                     Button(
                                         onClick = { hostViewModel.approveBooking(booking.id!!) },
                                         modifier = Modifier.weight(1f).height(50.dp),
+                                        enabled = !isLoading,
                                         shape = RoundedCornerShape(14.dp),
                                         colors = ButtonDefaults.buttonColors(
                                             containerColor = MaterialTheme.colorScheme.primary
                                         )
                                     ) {
-                                        Icon(Icons.Default.Check, contentDescription = null, modifier = Modifier.size(18.dp))
-                                        Spacer(modifier = Modifier.width(8.dp))
-                                        Text("Approve", fontWeight = FontWeight.Bold)
+                                        if (isLoading) {
+                                            CircularProgressIndicator(modifier = Modifier.size(18.dp), color = androidx.compose.ui.graphics.Color.White, strokeWidth = 2.dp)
+                                        } else {
+                                            Icon(Icons.Default.Check, contentDescription = null, modifier = Modifier.size(18.dp))
+                                            Spacer(modifier = Modifier.width(8.dp))
+                                            Text("Approve", fontWeight = FontWeight.Bold)
+                                        }
                                     }
                                     
                                     OutlinedButton(
                                         onClick = { hostViewModel.rejectBooking(booking.id!!) },
                                         modifier = Modifier.weight(1f).height(50.dp),
+                                        enabled = !isLoading,
                                         shape = RoundedCornerShape(14.dp),
                                         border = androidx.compose.foundation.BorderStroke(1.dp, MaterialTheme.colorScheme.error.copy(alpha = 0.5f)),
                                         colors = ButtonDefaults.outlinedButtonColors(

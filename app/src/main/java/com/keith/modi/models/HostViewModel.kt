@@ -254,32 +254,38 @@ class HostViewModel : ViewModel() {
 
     fun approveBooking(bookingId: String) {
         viewModelScope.launch {
+            _listingState.value = HostListingState.Loading
             try {
                 Supabase.client.postgrest["bookings"].update(
-                    mapOf("status" to "CONFIRMED")
+                    buildJsonObject { put("status", "CONFIRMED") }
                 ) {
                     filter {
                         eq("id", bookingId)
                     }
                 }
                 fetchStats()
+                _listingState.value = HostListingState.Success
             } catch (e: Exception) {
+                _listingState.value = HostListingState.Error(ErrorUtils.sanitizeError(e))
             }
         }
     }
 
     fun rejectBooking(bookingId: String) {
         viewModelScope.launch {
+            _listingState.value = HostListingState.Loading
             try {
                 Supabase.client.postgrest["bookings"].update(
-                    mapOf("status" to "CANCELLED")
+                    buildJsonObject { put("status", "CANCELLED") }
                 ) {
                     filter {
                         eq("id", bookingId)
                     }
                 }
                 fetchStats()
+                _listingState.value = HostListingState.Success
             } catch (e: Exception) {
+                _listingState.value = HostListingState.Error(ErrorUtils.sanitizeError(e))
             }
         }
     }

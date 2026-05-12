@@ -2,8 +2,13 @@ package com.keith.modi.utils
 
 import io.github.jan.supabase.exceptions.HttpRequestException
 
+import kotlinx.coroutines.CancellationException
+
 object ErrorUtils {
     fun sanitizeError(e: Throwable): String {
+        // PENDO SECURITY: Never suppress cancellation, let it propagate naturally
+        if (e is CancellationException) throw e
+
         // PENDO: SECURITY FIRST - Strip tokens but reveal the technical heart of the issue
         var message = e.message ?: ""
         message = message.replace(Regex("Bearer\\s+[a-zA-Z0-9\\-_\\.]+"), "[TOKEN MASKED]")
@@ -23,14 +28,24 @@ object ErrorUtils {
             message.contains("User already registered", ignoreCase = true) -> "This email is already registered. Please login instead."
             message.contains("Email address already exists", ignoreCase = true) -> "This email is already in use. Try a different one."
 
-            // PENDO: Infrastructure Errors
+            // PENDO: Infrastructure & Connectivity Errors
+            message.contains("Unable to resolve host", ignoreCase = true) || 
+            message.contains("No address associated with hostname", ignoreCase = true) -> 
+                "Network Error: Unable to connect to our servers. Please check your internet connection."
+                
             message.contains("Cloudinary", ignoreCase = true) -> "Media Upload Failed: ${message.substringAfter("Cloudinary Error: ").substringBefore("\n")}"
             message.contains("User not authenticated", ignoreCase = true) -> "Session expired. Please log in again."
             message.contains("403", ignoreCase = true) -> "Permission Denied (403). Check database RLS policies."
 
             // PENDO: Trace debugging - Shield technical leaks (URLs/Tokens)
             else -> {
-                if (message.isNotBlank()) message else "An unexpected error occurred. Please try again."
+                if (message.contains("http", ignoreCase = true)) {
+                    "A secure server error occurred. Please try again later."
+                } else if (message.isNotBlank()) {
+                    message
+                } else {
+                    "An unexpected error occurred. Please try again."
+                }
             }
         }
     }

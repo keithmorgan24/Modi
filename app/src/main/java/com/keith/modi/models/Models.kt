@@ -95,3 +95,14 @@ data class Notification(
     val metadata: JsonObject? = null,
     @SerialName("created_at") val createdAt: String? = null
 )
+
+@Serializable
+data class AppRelease(
+    val id: String? = null,
+    @SerialName("version_name") val versionName: String,
+    @SerialName("version_code") val versionCode: Int,
+    @SerialName("apk_path") val apkPath: String,
+    @SerialName("release_notes") val releaseNotes: String? = null,
+    @SerialName("is_critical") val isCritical: Boolean = false,
+    @SerialName("created_at") val createdAt: String? = null
+)

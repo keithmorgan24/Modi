@@ -35,6 +35,8 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.viewmodel.compose.viewModel
+import coil.compose.AsyncImage
+import androidx.compose.ui.layout.ContentScale
 import com.keith.modi.models.AuthViewModel
 import com.keith.modi.models.AuthState
 import com.keith.modi.models.MainViewModel
@@ -130,11 +132,11 @@ fun EditProfileScreen(
                             CircularProgressIndicator(modifier = Modifier.size(40.dp))
                         }
                     } else if (avatarUrl.isNotEmpty()) {
-                        coil.compose.AsyncImage(
+                        AsyncImage(
                             model = avatarUrl,
                             contentDescription = "Avatar",
                             modifier = Modifier.fillMaxSize().clip(CircleShape),
-                            contentScale = androidx.compose.ui.layout.ContentScale.Crop
+                            contentScale = ContentScale.Crop
                         )
                     } else {
                         Icon(

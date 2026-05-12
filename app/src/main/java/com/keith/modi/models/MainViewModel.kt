@@ -62,10 +62,22 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         EncryptedSharedPreferences.PrefValueEncryptionScheme.AES256_GCM
     )
 
+    private val networkCallback = object : ConnectivityManager.NetworkCallback() {
+        override fun onAvailable(network: Network) {
+            _isOnline.value = true
+            if (_userProfile.value == null) {
+                fetchUserProfile()
+            }
+        }
+
+        override fun onLost(network: Network) {
+            _isOnline.value = false
+        }
+    }
+
     init {
         loadCachedProfile()
         observeSessionStatus()
-        listenToProfileChanges()
         observeNetwork()
     }
 
@@ -75,18 +87,15 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
             .addCapability(NetworkCapabilities.NET_CAPABILITY_INTERNET)
             .build()
         
-        connectivityManager.registerNetworkCallback(request, object : ConnectivityManager.NetworkCallback() {
-            override fun onAvailable(network: Network) {
-                _isOnline.value = true
-                if (_userProfile.value == null) {
-                    fetchUserProfile()
-                }
-            }
+        connectivityManager.registerNetworkCallback(request, networkCallback)
+    }
 
-            override fun onLost(network: Network) {
-                _isOnline.value = false
-            }
-        })
+    override fun onCleared() {
+        super.onCleared()
+        val connectivityManager = getApplication<Application>().getSystemService(Context.CONNECTIVITY_SERVICE) as ConnectivityManager
+        try {
+            connectivityManager.unregisterNetworkCallback(networkCallback)
+        } catch (e: Exception) {}
     }
 
     private fun observeSessionStatus() {
@@ -94,6 +103,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
             Supabase.client.auth.sessionStatus.collect { status ->
                 if (status is SessionStatus.Authenticated) {
                     fetchUserProfile()
+                    listenToProfileChanges() // Start listening only when authenticated
                 } else if (status is SessionStatus.NotAuthenticated) {
                     _userProfile.value = null
                     clearCachedProfile()
@@ -205,20 +215,32 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     private fun listenToProfileChanges() {
         viewModelScope.launch {
             val userId = Supabase.client.auth.currentUserOrNull()?.id ?: return@launch
-            val channel = Supabase.client.channel("profile_changes")
-            val profileFlow = channel.postgresChangeFlow<PostgresAction>(schema = "public") { table = "profiles" }
-
-            profileFlow.onEach { action ->
-                if (action is PostgresAction.Update) {
-                    val updatedProfile = action.decodeRecord<Profile>()
-                    if (updatedProfile.id == userId) {
-                        _userProfile.value = updatedProfile
-                        cacheProfile(updatedProfile)
-                    }
+            
+            // PENDO: Robust Realtime initialization
+            // We use a unique channel ID per ViewModel instance to avoid "already joined" errors
+            val channelId = "profile_changes_${System.currentTimeMillis()}"
+            val channel = Supabase.client.channel(channelId)
+            
+            try {
+                val profileFlow = channel.postgresChangeFlow<PostgresAction>(schema = "public") { 
+                    table = "profiles" 
                 }
-            }.launchIn(viewModelScope)
 
-            channel.subscribe()
+                profileFlow.onEach { action ->
+                    if (action is PostgresAction.Update) {
+                        val updatedProfile = action.decodeRecord<Profile>()
+                        if (updatedProfile.id == userId) {
+                            _userProfile.value = updatedProfile
+                            cacheProfile(updatedProfile)
+                        }
+                    }
+                }.launchIn(viewModelScope)
+
+                channel.subscribe()
+            } catch (e: Exception) {
+                // If it fails, we still have the initial fetch and polling options
+                println("[REALTIME] Profile listener failed: ${e.message}")
+            }
         }
     }
 }

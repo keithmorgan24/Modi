@@ -68,6 +68,9 @@ dependencies {
     implementation(libs.androidx.lifecycle.viewmodel.compose)
     implementation(libs.kotlinx.serialization.json)
 
+    // QR Code
+    implementation(libs.zxing.core)
+
     // Supabase
     implementation(platform(libs.supabase.bom))
     implementation(libs.supabase.postgrest)
@@ -77,7 +80,7 @@ dependencies {
     implementation(libs.supabase.functions)
 
     // Ktor (Required for Supabase)
-    implementation(libs.ktor.client.android)
+    implementation(libs.ktor.client.okhttp)
     implementation(libs.ktor.client.core)
 
     // Cloudinary

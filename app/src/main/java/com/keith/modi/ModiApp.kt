@@ -4,6 +4,7 @@ import androidx.compose.runtime.*
 import androidx.navigation.compose.*
 import com.keith.modi.models.*
 import com.keith.modi.ui.screens.auth.*
+import com.keith.modi.ui.screens.common.*
 import com.keith.modi.ui.screens.settings.*
 import com.keith.modi.navigation.MainScaffold
 import androidx.lifecycle.viewmodel.compose.viewModel
@@ -116,7 +117,14 @@ fun ModiApp(mainViewModel: MainViewModel = viewModel()) {
         }
 
 
-        composable("edit_profile") { EditProfileScreen(onBack = { navController.popBackStack() }) }
+        composable("edit_profile") { 
+            EditProfileScreen(
+                onBack = { navController.popBackStack() },
+                mainViewModel = mainViewModel,
+                authViewModel = authViewModel
+            ) 
+        }
+        composable("share_app") { ShareAppScreen(onBack = { navController.popBackStack() }) }
         composable("notifications") { 
             NotificationsScreen(
                 mainViewModel = mainViewModel,
@@ -129,7 +137,12 @@ fun ModiApp(mainViewModel: MainViewModel = viewModel()) {
                 }
             ) 
         }
-        composable("privacy_security") { PrivacySecurityScreen(onBack = { navController.popBackStack() }) }
+        composable("privacy_security") { 
+            PrivacySecurityScreen(
+                onBack = { navController.popBackStack() },
+                authViewModel = authViewModel
+            ) 
+        }
         composable("support") { SupportScreen(onBack = { navController.popBackStack() }) }
     }
 
