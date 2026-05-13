@@ -37,9 +37,9 @@ object ErrorUtils {
             message.contains("User not authenticated", ignoreCase = true) -> "Session expired. Please log in again."
             message.contains("403", ignoreCase = true) -> "Permission Denied (403). Check database RLS policies."
 
-            // PENDO: Trace debugging - Shield technical leaks (URLs/Tokens)
+            // PENDO: Trace debugging - Shield technical leaks but preserve the core error
             else -> {
-                if (message.contains("http", ignoreCase = true)) {
+                if (message.contains("http", ignoreCase = true) && !message.contains("rest", ignoreCase = true)) {
                     "A secure server error occurred. Please try again later."
                 } else if (message.isNotBlank()) {
                     message

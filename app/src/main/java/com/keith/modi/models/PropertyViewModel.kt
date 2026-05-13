@@ -33,6 +33,7 @@ sealed class PropertyState {
         val activeBooking: Booking? = null,
         val userBookings: List<Booking> = emptyList(),
         val reviews: Map<String, List<Review>> = emptyMap(),
+        val categories: List<Category> = emptyList(),
         val isBookingLoading: Boolean = false,
         val bookingError: String? = null
     ) : PropertyState()
@@ -128,11 +129,29 @@ class PropertyViewModel : ViewModel() {
                         } catch (e: Exception) { emptyList<Review>() }
                     }
 
+                    val categoriesDeferred = async {
+                        try {
+                            Supabase.client.postgrest["categories"].select().decodeList<Category>()
+                        } catch (e: Exception) {
+                            listOf(
+                                Category(name = "Nearby"),
+                                Category(name = "Beachfront"),
+                                Category(name = "Pool"),
+                                Category(name = "Luxury"),
+                                Category(name = "Modern"),
+                                Category(name = "WiFi"),
+                                Category(name = "Central"),
+                                Category(name = "Cabins")
+                            )
+                        }
+                    }
+
                     // Await all results with fallback
                     val properties = propertiesDeferred.await()
                     val favorites = favoritesDeferred.await()
                     val bookings = bookingsDeferred.await()
                     val allReviews = reviewsDeferred.await()
+                    val categories = categoriesDeferred.await()
 
                     val reviewsByProperty = allReviews.groupBy { it.propertyId ?: "" }.filterKeys { it.isNotEmpty() }
                     val updatedProperties = properties.map { p -> p.copy(isLiked = favorites.any { it.propertyId == p.id }) }
@@ -141,7 +160,8 @@ class PropertyViewModel : ViewModel() {
                         properties = updatedProperties, 
                         favorites = favorites.map { it.propertyId }, 
                         userBookings = bookings, 
-                        reviews = reviewsByProperty
+                        reviews = reviewsByProperty,
+                        categories = categories
                     )
                 }
             } catch (e: Exception) {

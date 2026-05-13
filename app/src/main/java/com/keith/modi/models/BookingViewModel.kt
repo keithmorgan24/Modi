@@ -6,12 +6,10 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.keith.modi.CloudinaryHelper
 import com.keith.modi.Supabase
-import com.keith.modi.utils.ErrorUtils
 import io.github.jan.supabase.auth.auth
 import io.github.jan.supabase.postgrest.postgrest
 import io.github.jan.supabase.postgrest.query.Columns
 import io.github.jan.supabase.realtime.PostgresAction
-import io.github.jan.supabase.realtime.Realtime
 import io.github.jan.supabase.realtime.channel
 import io.github.jan.supabase.realtime.decodeRecord
 import io.github.jan.supabase.realtime.postgresChangeFlow
@@ -46,6 +44,7 @@ class BookingViewModel : ViewModel() {
         viewModelScope.launch {
             Supabase.client.auth.sessionStatus.collectLatest { status ->
                 if (status is SessionStatus.Authenticated) {
+                    fetchUserBookings() 
                     val userId = status.session.user?.id
                     if (userId != null) {
                         setupRealtime(userId)
@@ -90,9 +89,7 @@ class BookingViewModel : ViewModel() {
                 }.launchIn(viewModelScope)
 
                 channel.subscribe()
-            } catch (e: Exception) {
-                // Silent failure
-            }
+            } catch (_: Exception) {}
         }
     }
 
@@ -102,61 +99,65 @@ class BookingViewModel : ViewModel() {
             try {
                 val user = Supabase.client.auth.currentUserOrNull()
                 if (user != null) {
-                    val bookings = try {
-                        Supabase.client.postgrest["bookings"]
+                    // PENDO: Data Accuracy Check
+                    // We attempt a joined fetch first. If it fails, we fall back to a simple fetch.
+                    try {
+                        val bookings = Supabase.client.postgrest["bookings"]
                             .select(columns = Columns.raw("*, properties(*)")) {
-                                filter {
-                                    eq("guest_id", user.id)
-                                }
+                                filter { eq("guest_id", user.id) }
                             }
                             .decodeList<Booking>()
+                        _bookingState.value = BookingState.Success(bookings)
                     } catch (e: Exception) {
-                        // Fallback: If join fails, fetch bookings only to avoid crash
-                        Supabase.client.postgrest["bookings"]
+                        // Fallback to simple fetch if join fails (schema mismatch or relationship issue)
+                        val bookings = Supabase.client.postgrest["bookings"]
                             .select {
-                                filter {
-                                    eq("guest_id", user.id)
-                                }
+                                filter { eq("guest_id", user.id) }
                             }
                             .decodeList<Booking>()
+                        _bookingState.value = BookingState.Success(bookings)
                     }
-                    
-                    _bookingState.value = BookingState.Success(bookings)
                 } else {
                     _bookingState.value = BookingState.Error("Please sign in to view your trips.")
                 }
             } catch (e: Exception) {
-                // ErrorUtils will now rethrow CancellationException automatically
-                _bookingState.value = BookingState.Error(ErrorUtils.sanitizeError(e))
+                // PENDO SECURITY: Mask tokens but provide technical context for debugging
+                val rawMsg = e.message ?: "Unknown Connection Error"
+                val cleanedMsg = rawMsg.replace(Regex("Bearer\\s+[a-zA-Z0-9\\-_\\.]+"), "[TOKEN MASKED]")
+                _bookingState.value = BookingState.Error(cleanedMsg)
             }
         }
     }
 
-    fun submitReview(
-        context: Context,
-        booking: Booking,
-        rating: Int,
-        comment: String,
-        imageUris: List<Uri>,
-        onSuccess: () -> Unit
-    ) {
+    fun clearTripHistory() {
+        viewModelScope.launch {
+            try {
+                val userId = Supabase.client.auth.currentUserOrNull()?.id ?: return@launch
+                Supabase.client.postgrest["bookings"].delete {
+                    filter {
+                        eq("guest_id", userId)
+                        neq("status", "PENDING")
+                    }
+                }
+                fetchUserBookings()
+            } catch (_: Exception) {}
+        }
+    }
+
+    fun submitReview(context: Context, booking: Booking, rating: Int, comment: String, imageUris: List<Uri>, onSuccess: () -> Unit) {
         viewModelScope.launch {
             try {
                 val userId = Supabase.client.auth.currentUserOrNull()?.id ?: return@launch
                 val bookingId = booking.id ?: return@launch
 
-                // PENDO: Secure Concurrent Uploads
-                // We upload to Cloudinary first to get the public URLs
                 val uploadJobs = imageUris.map { uri ->
                     async {
                         val result = CloudinaryHelper.uploadImage(context, uri, "reviews")
                         result["secure_url"] as String
                     }
                 }
-                
                 val imageUrls = uploadJobs.awaitAll()
 
-                // PENDO: Data Integrity - Using formal Review model for type-safe database insertion
                 val review = Review(
                     bookingId = bookingId,
                     propertyId = booking.propertyId,
@@ -169,13 +170,9 @@ class BookingViewModel : ViewModel() {
                 )
 
                 Supabase.client.postgrest["reviews"].insert(review)
-                
-                fetchUserBookings() // Refresh UI state
+                fetchUserBookings()
                 onSuccess()
-            } catch (e: Exception) {
-                // Pendo: Log errors securely, don't crash
-                e.printStackTrace()
-            }
+            } catch (_: Exception) {}
         }
     }
 }

@@ -1,5 +1,6 @@
 package com.keith.modi.ui.screens.customer
 
+import androidx.activity.compose.BackHandler
 import androidx.compose.animation.animateColorAsState
 import androidx.compose.animation.core.*
 import androidx.compose.foundation.background
@@ -47,7 +48,6 @@ fun ExploreScreen(viewModel: PropertyViewModel = viewModel()) {
     val scope = rememberCoroutineScope()
     
     var searchQuery by remember { mutableStateOf("") }
-    val categories = listOf("All", "Beachfront", "Pool", "Luxury", "Modern", "WiFi", "Central", "Cabins")
     var selectedCategory by remember { mutableStateOf("All") }
     
     var showFilterSheet by remember { mutableStateOf(false) }
@@ -55,16 +55,60 @@ fun ExploreScreen(viewModel: PropertyViewModel = viewModel()) {
     var showBookingSheet by remember { mutableStateOf(false) }
     var isMapView by remember { mutableStateOf(false) }
 
+    // PENDO: Intelligent Back Navigation - Intercept back press when Map is open
+    BackHandler(enabled = isMapView) {
+        isMapView = false
+    }
+
+    // PENDO: Calculate filtered properties once to be shared by List and Map
+    val filteredProperties = remember(propertyState, searchQuery, selectedCategory) {
+        val success = propertyState as? PropertyState.Success ?: return@remember emptyList()
+        success.properties.filter { property ->
+            val matchesCategory = if (selectedCategory == "All") true 
+                else property.category.equals(selectedCategory, ignoreCase = true) || 
+                     property.tags.any { it.equals(selectedCategory, ignoreCase = true) }
+            
+            val matchesSearch = if (searchQuery.isBlank()) true
+                else property.title.contains(searchQuery, ignoreCase = true) || 
+                     property.locationName.contains(searchQuery, ignoreCase = true) ||
+                     (property.description ?: "").contains(searchQuery, ignoreCase = true)
+            
+            matchesCategory && matchesSearch
+        }
+    }
+
     Box(modifier = Modifier.fillMaxSize()) {
-        if (isMapView && propertyState is PropertyState.Success) {
-            MapScreen(
-                properties = (propertyState as PropertyState.Success).properties,
-                onBack = { isMapView = false },
-                onPropertyClick = {
-                    selectedProperty = it
-                    showBookingSheet = true
+        if (isMapView) {
+            when (propertyState) {
+                is PropertyState.Success -> {
+                    MapScreen(
+                        properties = filteredProperties,
+                        onBack = { isMapView = false },
+                        onPropertyClick = {
+                            selectedProperty = it
+                            showBookingSheet = true
+                        }
+                    )
                 }
-            )
+                is PropertyState.Loading -> {
+                    Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                        Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                            CircularProgressIndicator()
+                            Spacer(modifier = Modifier.height(16.dp))
+                            Text("Loading Map View...", color = MaterialTheme.colorScheme.primary)
+                        }
+                    }
+                }
+                is PropertyState.Error -> {
+                    Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                        Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                            Icon(Icons.Default.Map, null, modifier = Modifier.size(64.dp), tint = MaterialTheme.colorScheme.error)
+                            Text("Unable to load map")
+                            Button(onClick = { isMapView = false }) { Text("Go Back") }
+                        }
+                    }
+                }
+            }
         } else {
             Scaffold(
                 topBar = {
@@ -76,18 +120,26 @@ fun ExploreScreen(viewModel: PropertyViewModel = viewModel()) {
                         ) {
                             Text(text = "Find your next stay", style = MaterialTheme.typography.headlineMedium, fontWeight = FontWeight.Bold)
                             IconButton(onClick = { isMapView = true }) {
-                                Icon(Icons.Default.Map, null, tint = MaterialTheme.colorScheme.primary)
+                                Icon(Icons.Default.Map, "Switch to Map", tint = MaterialTheme.colorScheme.primary)
                             }
                         }
                         Spacer(modifier = Modifier.height(16.dp))
+                        
                         OutlinedTextField(
                             value = searchQuery,
                             onValueChange = { searchQuery = it },
-                            placeholder = { Text("Search Airbnbs...") },
+                            placeholder = { Text("Search by title, location or vibes...") },
                             leadingIcon = { Icon(Icons.Default.Search, null) },
                             trailingIcon = { 
-                                IconButton(onClick = { showFilterSheet = true }) {
-                                    Icon(Icons.Default.FilterList, null)
+                                Row {
+                                    if (searchQuery.isNotEmpty()) {
+                                        IconButton(onClick = { searchQuery = "" }) {
+                                            Icon(Icons.Default.Close, null)
+                                        }
+                                    }
+                                    IconButton(onClick = { showFilterSheet = true }) {
+                                        Icon(Icons.Default.FilterList, null)
+                                    }
                                 }
                             },
                             modifier = Modifier.fillMaxWidth(),
@@ -112,8 +164,8 @@ fun ExploreScreen(viewModel: PropertyViewModel = viewModel()) {
                     }
                     is PropertyState.Success -> {
                         val successState = propertyState as PropertyState.Success
-                        val filteredProperties = if (selectedCategory == "All") successState.properties else successState.properties.filter { it.tags.contains(selectedCategory) || it.category == selectedCategory }
-
+                        val categories = listOf("All") + successState.categories.map { it.name }
+                        
                         var isRefreshing by remember { mutableStateOf(false) }
                         PullToRefreshBox(
                             isRefreshing = isRefreshing,
@@ -123,30 +175,61 @@ fun ExploreScreen(viewModel: PropertyViewModel = viewModel()) {
                             },
                             modifier = Modifier.fillMaxSize().padding(innerPadding)
                         ) {
-                            if (filteredProperties.isEmpty()) {
-                                Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                                    Text("No properties found", style = MaterialTheme.typography.bodyLarge)
+                            Column(modifier = Modifier.fillMaxSize()) {
+                                LazyRow(
+                                    modifier = Modifier.padding(vertical = 8.dp),
+                                    contentPadding = PaddingValues(horizontal = 16.dp),
+                                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                                ) {
+                                    items(categories) { category ->
+                                        FilterChip(
+                                            selected = selectedCategory == category,
+                                            onClick = { selectedCategory = category },
+                                            label = { Text(category) }
+                                        )
+                                    }
                                 }
-                            } else {
-                                LazyColumn(modifier = Modifier.fillMaxSize(), contentPadding = PaddingValues(bottom = 16.dp)) {
-                                    item {
-                                        LazyRow(modifier = Modifier.padding(vertical = 8.dp), contentPadding = PaddingValues(horizontal = 16.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                                            items(categories) { category ->
-                                                FilterChip(selected = selectedCategory == category, onClick = { selectedCategory = category }, label = { Text(category) })
+
+                                if (filteredProperties.isEmpty()) {
+                                    Box(
+                                        modifier = Modifier.weight(1f).fillMaxWidth(),
+                                        contentAlignment = Alignment.Center
+                                    ) {
+                                        Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                                            Icon(
+                                                Icons.Default.SearchOff,
+                                                null,
+                                                modifier = Modifier.size(64.dp),
+                                                tint = MaterialTheme.colorScheme.secondary.copy(alpha = 0.3f)
+                                            )
+                                            Spacer(modifier = Modifier.height(16.dp))
+                                            Text(
+                                                "No matches found",
+                                                style = MaterialTheme.typography.bodyLarge,
+                                                color = MaterialTheme.colorScheme.secondary
+                                            )
+                                            TextButton(onClick = { selectedCategory = "All"; searchQuery = "" }) {
+                                                Text("Reset Filters")
                                             }
                                         }
                                     }
-                                    items(filteredProperties) { property ->
-                                        AirbnbCard(
-                                            property = property,
-                                            reviews = successState.reviews[property.id] ?: emptyList(),
-                                            onClick = {
-                                                selectedProperty = property
-                                                showBookingSheet = true
-                                                viewModel.createPendingBooking(property)
-                                            },
-                                            onLikeClick = { property.id?.let { viewModel.toggleLike(it) } }
-                                        )
+                                } else {
+                                    LazyColumn(
+                                        modifier = Modifier.fillMaxSize(),
+                                        contentPadding = PaddingValues(bottom = 16.dp)
+                                    ) {
+                                        items(filteredProperties) { property ->
+                                            AirbnbCard(
+                                                property = property,
+                                                reviews = successState.reviews[property.id] ?: emptyList(),
+                                                onClick = {
+                                                    selectedProperty = property
+                                                    showBookingSheet = true
+                                                    viewModel.createPendingBooking(property)
+                                                },
+                                                onLikeClick = { property.id?.let { viewModel.toggleLike(it) } }
+                                            )
+                                        }
                                     }
                                 }
                             }
@@ -249,10 +332,17 @@ fun BookingSheetContent(
                     viewModel.confirmBooking(activeBooking.id!!)
                     
                     // PENDO: Trigger Google Maps Navigation on success
-                    val uri = Uri.parse("google.navigation:q=${property.latitude},${property.longitude}")
-                    val mapIntent = Intent(Intent.ACTION_VIEW, uri)
-                    mapIntent.setPackage("com.google.android.apps.maps")
-                    context.startActivity(mapIntent)
+                    try {
+                        val uri = Uri.parse("google.navigation:q=${property.latitude},${property.longitude}")
+                        val mapIntent = Intent(Intent.ACTION_VIEW, uri)
+                        mapIntent.setPackage("com.google.android.apps.maps")
+                        context.startActivity(mapIntent)
+                    } catch (e: Exception) {
+                        // Fallback: Just open any map app if Google Maps is missing
+                        val uri = Uri.parse("geo:${property.latitude},${property.longitude}?q=${Uri.encode(property.title)}")
+                        val mapIntent = Intent(Intent.ACTION_VIEW, uri)
+                        context.startActivity(mapIntent)
+                    }
                     
                     onClose()
                 } else {

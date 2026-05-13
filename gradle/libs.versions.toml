@@ -16,6 +16,8 @@ coil = "2.6.0"
 googleMapsCompose = "6.1.2"
 playServicesMaps = "19.0.0"
 playServicesLocation = "21.3.0"
+osmdroid = "6.1.20"
+kotlinx-datetime = "0.6.1"
 kotlinx-serialization = "1.8.0"
 lifecycleViewmodelCompose = "2.10.0"
 zxing = "3.5.3"
@@ -64,9 +66,11 @@ play-services-location = { group = "com.google.android.gms", name = "play-servic
 
 # Serialization
 kotlinx-serialization-json = { group = "org.jetbrains.kotlinx", name = "kotlinx-serialization-json", version.ref = "kotlinx-serialization" }
+kotlinx-datetime = { group = "org.jetbrains.kotlinx", name = "kotlinx-datetime", version.ref = "kotlinx-datetime" }
 
 # QR Code
 zxing-core = { group = "com.google.zxing", name = "core", version.ref = "zxing" }
+osmdroid = { group = "org.osmdroid", name = "osmdroid-android", version.ref = "osmdroid" }
 
 [plugins]
 android-application = { id = "com.android.application", version.ref = "agp" }

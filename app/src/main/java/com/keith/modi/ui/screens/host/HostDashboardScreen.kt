@@ -1,5 +1,6 @@
 package com.keith.modi.ui.screens.host
 
+import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.layout.*
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.foundation.lazy.LazyColumn
@@ -37,6 +38,12 @@ fun HostDashboardScreen(hostViewModel: HostViewModel = viewModel()) {
     val listingState by hostViewModel.listingState.collectAsState()
     val snackbarHostState = remember { SnackbarHostState() }
     val scope = rememberCoroutineScope()
+
+    // PENDO: Intelligent Back Navigation - Handle sub-screens before closing tab
+    BackHandler(enabled = showListWizard || showBookingRequests) {
+        if (showListWizard) showListWizard = false
+        else if (showBookingRequests) showBookingRequests = false
+    }
 
     LaunchedEffect(listingState) {
         if (listingState is HostListingState.Success) {

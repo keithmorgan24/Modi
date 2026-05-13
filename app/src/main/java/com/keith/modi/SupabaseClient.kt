@@ -28,6 +28,14 @@ object Supabase {
             supabaseKey = SUPABASE_ANON_KEY
         ) {
             httpEngine = OkHttp.create()
+            
+            // PENDO: Data Integrity - Ignore unknown backend fields to prevent crashes during schema updates
+            defaultSerializer = io.github.jan.supabase.serializer.KotlinXSerializer(Json { 
+                ignoreUnknownKeys = true 
+                coerceInputValues = true
+                encodeDefaults = true
+            })
+
             install(Postgrest)
             install(Auth) {
                 sessionManager = SecureSessionManager(context)

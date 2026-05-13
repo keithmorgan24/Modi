@@ -3,6 +3,10 @@ package com.keith.modi.models
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.JsonObject
+import kotlin.random.Random
+
+@Serializable
+data class LatLng(val latitude: Double, val longitude: Double)
 
 @Serializable
 enum class UserRole {
@@ -30,11 +34,11 @@ data class Category(
 @Serializable
 data class Property(
     val id: String? = null,
-    @SerialName("host_id") val hostId: String,
-    val title: String,
+    @SerialName("host_id") val hostId: String = "",
+    val title: String = "Premium Space",
     val description: String? = null,
-    @SerialName("price_per_night") val price: Double,
-    @SerialName("location_name") val locationName: String,
+    @SerialName("price_per_night") val price: Double = 0.0,
+    @SerialName("location_name") val locationName: String = "Nairobi, Kenya",
     val latitude: Double? = null,
     val longitude: Double? = null,
     @SerialName("images") val imageUrls: List<String> = emptyList(),
@@ -51,16 +55,39 @@ data class Property(
 ) {
     val isFull: Boolean get() = occupiedRooms >= totalRooms
     val vacantRooms: Int get() = (totalRooms - occupiedRooms).coerceAtLeast(0)
+
+    /**
+     * PENDO: Generates a fuzzy location within a 500m radius of the actual location.
+     * Protects host privacy for unbooked properties while maintaining UI context.
+     */
+    fun getFuzzyLocation(): LatLng {
+        val lat = latitude ?: 0.0
+        val lon = longitude ?: 0.0
+        val random = Random(id.hashCode())
+        val radiusInDegrees = 500.0 / 111320.0 // Approx 500m in degrees
+        
+        val u = random.nextDouble()
+        val v = random.nextDouble()
+        val w = radiusInDegrees * kotlin.math.sqrt(u)
+        val t = 2 * kotlin.math.PI * v
+        val x = w * kotlin.math.cos(t)
+        val y = w * kotlin.math.sin(t)
+        
+        // Adjust y for latitude shrinkage
+        val newX = x / kotlin.math.cos(Math.toRadians(lat))
+        
+        return LatLng(lat + y, lon + newX)
+    }
 }
 
 @Serializable
 data class Booking(
     val id: String? = null,
-    @SerialName("property_id") val propertyId: String,
-    @SerialName("guest_id") val guestId: String,
-    val status: String, // PENDING, CONFIRMED, CANCELLED
-    @SerialName("expires_at") val expiresAt: String,
-    @SerialName("fee_paid") val feePaid: Double,
+    @SerialName("property_id") val propertyId: String = "",
+    @SerialName("guest_id") val guestId: String = "",
+    val status: String = "PENDING",
+    @SerialName("expires_at") val expiresAt: String = "",
+    @SerialName("fee_paid") val feePaid: Double = 0.0,
     @SerialName("properties") val property: Property? = null
 )
 

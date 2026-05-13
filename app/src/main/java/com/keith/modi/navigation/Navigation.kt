@@ -1,5 +1,6 @@
 package com.keith.modi.navigation
 
+import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.pager.HorizontalPager
 import androidx.compose.foundation.pager.rememberPagerState
@@ -52,6 +53,13 @@ fun MainScaffold(
     val pagerState = rememberPagerState { items.size }
     val scope = rememberCoroutineScope()
     val isOnline by mainViewModel.isOnline.collectAsState()
+
+    // PENDO: Intelligent Back Navigation - If not on the first tab, go to Explore first
+    BackHandler(enabled = pagerState.currentPage != 0) {
+        scope.launch {
+            pagerState.animateScrollToPage(0)
+        }
+    }
 
     Scaffold(
         topBar = {

@@ -67,6 +67,7 @@ dependencies {
     implementation(libs.androidx.compose.material3)
     implementation(libs.androidx.lifecycle.viewmodel.compose)
     implementation(libs.kotlinx.serialization.json)
+    implementation(libs.kotlinx.datetime)
 
     // QR Code
     implementation(libs.zxing.core)
@@ -92,9 +93,8 @@ dependencies {
     // Coil
     implementation(libs.coil.compose)
 
-    // Google Maps
-    implementation(libs.google.maps.compose)
-    implementation(libs.play.services.maps)
+    // OpenStreetMap (No-cost alternative)
+    implementation(libs.osmdroid)
     implementation(libs.play.services.location)
 
     testImplementation(libs.junit)

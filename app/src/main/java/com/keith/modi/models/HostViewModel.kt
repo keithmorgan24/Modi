@@ -136,7 +136,7 @@ class HostViewModel : ViewModel() {
                     _pendingBookingsCount.value = myPendingBookings.size
 
                     val confirmedBookings = bookings.filter { it.status == "CONFIRMED" }
-                    _totalEarnings.value = confirmedBookings.sumOf { it.feePaid }
+                    _totalEarnings.value = confirmedBookings.sumOf { it.feePaid ?: 0.0 }
                 }
             } catch (e: Exception) {
                 // Handle error
@@ -183,7 +183,7 @@ class HostViewModel : ViewModel() {
                     ?: throw Exception("User not authenticated")
 
                 val tags = mutableSetOf<String>()
-                tags.addAll(categories)
+                tags.addAll(categories.map { it.trim() })
                 
                 // PENDO: Wrap async operations in a coroutineScope to catch child exceptions properly
                 val imageUrls = kotlinx.coroutines.coroutineScope {
@@ -204,7 +204,7 @@ class HostViewModel : ViewModel() {
                                     val confidence = (tagMap?.get("confidence") as? Number)?.toDouble() ?: 0.0
                                     if (tagName != null && confidence > 0.7) {
                                         synchronized(tags) {
-                                            tags.add(tagName)
+                                            tags.add(tagName.trim())
                                         }
                                     }
                                 }
@@ -217,23 +217,27 @@ class HostViewModel : ViewModel() {
                     }.awaitAll()
                 }
 
+                val sanitizedName = name.trim()
+                val sanitizedDescription = description.trim()
+                val sanitizedLocation = location.trim()
+
                 val enrichedDescription = if (tags.isNotEmpty()) {
-                    "$description\n\n#${tags.joinToString(" #")}"
+                    "$sanitizedDescription\n\n#${tags.joinToString(" #")}"
                 } else {
-                    description
+                    sanitizedDescription
                 }
 
                 val newProperty = Property(
                     id = java.util.UUID.randomUUID().toString(),
                     hostId = userId,
-                    title = name,
+                    title = sanitizedName,
                     description = enrichedDescription,
                     price = price,
-                    locationName = location,
+                    locationName = sanitizedLocation,
                     imageUrls = imageUrls,
                     latitude = latitude,
                     longitude = longitude,
-                    category = categories.firstOrNull() ?: "Nearby",
+                    category = categories.firstOrNull()?.trim() ?: "Nearby",
                     tags = tags.toList(),
                     totalRooms = totalRooms,
                     occupiedRooms = 0
@@ -317,15 +321,20 @@ class HostViewModel : ViewModel() {
         viewModelScope.launch {
             _listingState.value = HostListingState.Loading
             try {
+                val sanitizedName = name.trim()
+                val sanitizedDescription = description.trim()
+                val sanitizedLocation = location.trim()
+                val sanitizedTags = tags.map { it.trim() }
+
                 val updates = buildJsonObject {
-                    put("title", name)
-                    put("description", description)
+                    put("title", sanitizedName)
+                    put("description", sanitizedDescription)
                     put("price_per_night", price)
-                    put("location_name", location)
-                    put("category", category)
+                    put("location_name", sanitizedLocation)
+                    put("category", category.trim())
                     put("total_rooms", totalRooms)
                     putJsonArray("tags") {
-                        tags.forEach { tag -> add(tag) }
+                        sanitizedTags.forEach { tag -> add(tag) }
                     }
                 }
 
@@ -334,13 +343,13 @@ class HostViewModel : ViewModel() {
                 }
                 _myProperties.value = _myProperties.value.map {
                     if (it.id == id) it.copy(
-                        title = name,
-                        description = description,
+                        title = sanitizedName,
+                        description = sanitizedDescription,
                         price = price,
-                        locationName = location,
-                        category = category,
+                        locationName = sanitizedLocation,
+                        category = category.trim(),
                         totalRooms = totalRooms,
-                        tags = tags
+                        tags = sanitizedTags
                     ) else it
                 }
                 _listingState.value = HostListingState.Success

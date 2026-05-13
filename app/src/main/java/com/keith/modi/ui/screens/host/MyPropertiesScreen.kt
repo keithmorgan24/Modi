@@ -303,72 +303,88 @@ fun ManagedPropertyCard(
                 color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.4f),
                 border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant)
             ) {
-                Column(modifier = Modifier.padding(16.dp)) {
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.SpaceBetween,
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        Column {
-                            Text("Room Management", style = MaterialTheme.typography.labelLarge, color = MaterialTheme.colorScheme.primary, fontWeight = FontWeight.Bold)
-                            Text(
-                                if (property.isFull) "No Vacancy" else "${property.vacantRooms} of ${property.totalRooms} rooms free",
-                                style = MaterialTheme.typography.bodySmall,
-                                color = if (property.isFull) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.onSurfaceVariant
-                            )
+                Box {
+                    Column(modifier = Modifier.padding(16.dp)) {
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Column {
+                                Text("Room Management", style = MaterialTheme.typography.labelLarge, color = MaterialTheme.colorScheme.primary, fontWeight = FontWeight.Bold)
+                                Text(
+                                    if (property.isFull) "No Vacancy" else "${property.vacantRooms} of ${property.totalRooms} rooms free",
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = if (property.isFull) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.onSurfaceVariant
+                                )
+                            }
+                            
+                            // Percentage Indicator
+                            val occupancyRate = (property.occupiedRooms.toFloat() / property.totalRooms.toFloat())
+                            Box(contentAlignment = Alignment.Center, modifier = Modifier.size(40.dp)) {
+                                CircularProgressIndicator(
+                                    progress = { occupancyRate },
+                                    modifier = Modifier.fillMaxSize(),
+                                    strokeWidth = 4.dp,
+                                    color = if (occupancyRate > 0.8f) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.primary,
+                                    trackColor = MaterialTheme.colorScheme.surface
+                                )
+                                Text("${(occupancyRate * 100).toInt()}%", style = MaterialTheme.typography.labelSmall, fontWeight = FontWeight.Bold)
+                            }
                         }
                         
-                        // Percentage Indicator
-                        val occupancyRate = (property.occupiedRooms.toFloat() / property.totalRooms.toFloat())
-                        Box(contentAlignment = Alignment.Center, modifier = Modifier.size(40.dp)) {
-                            CircularProgressIndicator(
-                                progress = { occupancyRate },
-                                modifier = Modifier.fillMaxSize(),
-                                strokeWidth = 4.dp,
-                                color = if (occupancyRate > 0.8f) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.primary,
-                                trackColor = MaterialTheme.colorScheme.surface
-                            )
-                            Text("${(occupancyRate * 100).toInt()}%", style = MaterialTheme.typography.labelSmall, fontWeight = FontWeight.Bold)
+                        Spacer(modifier = Modifier.height(16.dp))
+                        
+                        // Visual Room Grid: Tactile interactive control
+                        LazyVerticalGrid(
+                            columns = GridCells.Adaptive(minSize = 44.dp),
+                            modifier = Modifier.heightIn(max = 200.dp),
+                            horizontalArrangement = Arrangement.spacedBy(8.dp),
+                            verticalArrangement = Arrangement.spacedBy(8.dp),
+                            userScrollEnabled = false
+                        ) {
+                            items(property.totalRooms) { index ->
+                                val isOccupied = index < property.occupiedRooms
+                                val color = if (isOccupied) MaterialTheme.colorScheme.errorContainer else MaterialTheme.colorScheme.primaryContainer
+                                val icon = if (isOccupied) Icons.Default.RemoveCircle else Icons.Default.CheckCircle
+                                
+                                Surface(
+                                    modifier = Modifier
+                                        .aspectRatio(1f)
+                                        .clickable(enabled = hostViewModel.listingState.value !is HostListingState.Loading) {
+                                            // If user clicks an occupied room, mark it as vacant (reduce occupied count)
+                                            // and vice versa. This mimics individual room selection.
+                                            property.id?.let { id ->
+                                                val newOccupied = if (isOccupied) property.occupiedRooms - 1 else property.occupiedRooms + 1
+                                                hostViewModel.updatePropertyOccupancy(id, newOccupied.coerceIn(0, property.totalRooms))
+                                            }
+                                        },
+                                    shape = RoundedCornerShape(12.dp),
+                                    color = color,
+                                    border = if (isOccupied) null else BorderStroke(1.dp, MaterialTheme.colorScheme.primary.copy(alpha = 0.5f))
+                                ) {
+                                    Box(contentAlignment = Alignment.Center) {
+                                        Icon(
+                                            icon, 
+                                            contentDescription = null, 
+                                            modifier = Modifier.size(20.dp),
+                                            tint = if (isOccupied) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.primary
+                                        )
+                                    }
+                                }
+                            }
                         }
                     }
                     
-                    Spacer(modifier = Modifier.height(16.dp))
-                    
-                    // Visual Room Grid: Tactile interactive control
-                    LazyVerticalGrid(
-                        columns = GridCells.Adaptive(minSize = 44.dp),
-                        modifier = Modifier.heightIn(max = 200.dp),
-                        horizontalArrangement = Arrangement.spacedBy(8.dp),
-                        verticalArrangement = Arrangement.spacedBy(8.dp),
-                        userScrollEnabled = false
-                    ) {
-                        items(property.totalRooms) { index ->
-                            val isOccupied = index < property.occupiedRooms
-                            val color = if (isOccupied) MaterialTheme.colorScheme.errorContainer else MaterialTheme.colorScheme.primaryContainer
-                            val icon = if (isOccupied) Icons.Default.RemoveCircle else Icons.Default.CheckCircle
-                            
-                            Surface(
-                                modifier = Modifier
-                                    .aspectRatio(1f)
-                                    .clickable {
-                                        // If user clicks an occupied room, mark it as vacant (reduce occupied count)
-                                        // and vice versa. This mimics individual room selection.
-                                        val newOccupied = if (isOccupied) property.occupiedRooms - 1 else property.occupiedRooms + 1
-                                        hostViewModel.updatePropertyOccupancy(property.id!!, newOccupied.coerceIn(0, property.totalRooms))
-                                    },
-                                shape = RoundedCornerShape(12.dp),
-                                color = color,
-                                border = if (isOccupied) null else BorderStroke(1.dp, MaterialTheme.colorScheme.primary.copy(alpha = 0.5f))
-                            ) {
-                                Box(contentAlignment = Alignment.Center) {
-                                    Icon(
-                                        icon, 
-                                        contentDescription = null, 
-                                        modifier = Modifier.size(20.dp),
-                                        tint = if (isOccupied) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.primary
-                                    )
-                                }
-                            }
+                    // PENDO: Loading overlay for atomic updates
+                    if (hostViewModel.listingState.value is HostListingState.Loading) {
+                        Box(
+                            modifier = Modifier
+                                .matchParentSize()
+                                .background(Color.White.copy(alpha = 0.4f)),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            CircularProgressIndicator(modifier = Modifier.size(24.dp))
                         }
                     }
                 }
