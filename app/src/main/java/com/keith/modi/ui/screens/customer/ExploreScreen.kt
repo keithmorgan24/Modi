@@ -27,6 +27,10 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.viewmodel.compose.viewModel
 import coil.compose.AsyncImage
+import androidx.compose.ui.platform.LocalFocusManager
+import androidx.compose.ui.text.input.ImeAction
+import androidx.compose.foundation.text.KeyboardActions
+import androidx.compose.foundation.text.KeyboardOptions
 import android.content.Intent
 import android.net.Uri
 import androidx.compose.ui.platform.LocalContext
@@ -51,6 +55,7 @@ fun ExploreScreen(
     val propertyState by viewModel.propertyState.collectAsState()
     val isGuest by mainViewModel.isGuest.collectAsState()
     val scope = rememberCoroutineScope()
+    val focusManager = LocalFocusManager.current
     
     var searchQuery by remember { mutableStateOf("") }
     var selectedCategory by remember { mutableStateOf("All") }
@@ -154,7 +159,9 @@ fun ExploreScreen(
                             },
                             modifier = Modifier.fillMaxWidth(),
                             shape = RoundedCornerShape(12.dp),
-                            singleLine = true
+                            singleLine = true,
+                            keyboardOptions = KeyboardOptions(imeAction = ImeAction.Search),
+                            keyboardActions = KeyboardActions(onSearch = { focusManager.clearFocus() })
                         )
                     }
                 }
@@ -326,13 +333,56 @@ fun BookingSheetContent(
     Column(modifier = Modifier.fillMaxHeight(0.8f).padding(24.dp).verticalScroll(rememberScrollState()).navigationBarsPadding()) {
         Text("Confirm Your Stay", style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.Bold)
         
-        Spacer(Modifier.height(24.dp))
+        Spacer(Modifier.height(16.dp))
+        
+        // PENDO: Intelligent Image Gallery - Support multiple property photos
+        if (property.imageUrls.isNotEmpty()) {
+            LazyRow(
+                modifier = Modifier.fillMaxWidth().height(200.dp),
+                horizontalArrangement = Arrangement.spacedBy(12.dp)
+            ) {
+                items(property.imageUrls) { imageUrl ->
+                    Surface(
+                        modifier = Modifier.width(300.dp).fillMaxHeight(),
+                        shape = RoundedCornerShape(20.dp),
+                        color = MaterialTheme.colorScheme.surfaceVariant
+                    ) {
+                        AsyncImage(
+                            model = imageUrl,
+                            contentDescription = "Property Photo",
+                            modifier = Modifier.fillMaxSize(),
+                            contentScale = ContentScale.Crop
+                        )
+                    }
+                }
+            }
+            Spacer(Modifier.height(24.dp))
+        }
+
         Text(property.title, style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
         Text(property.locationName, color = MaterialTheme.colorScheme.secondary)
 
         Spacer(Modifier.height(16.dp))
         Text("About this space", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
         Text(property.description ?: "Experience the best of Modi living in this high-end, secure space.", style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+
+        // PENDO: Feature Tags - Show property highlights
+        if (property.tags.isNotEmpty()) {
+            Spacer(Modifier.height(12.dp))
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(12.dp)
+            ) {
+                property.tags.forEach { tag ->
+                    Text(
+                        text = "#$tag",
+                        style = MaterialTheme.typography.labelLarge,
+                        color = MaterialTheme.colorScheme.secondary,
+                        fontWeight = FontWeight.Black
+                    )
+                }
+            }
+        }
 
         Spacer(Modifier.height(24.dp))
         Card(modifier = Modifier.fillMaxWidth(), colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f))) {

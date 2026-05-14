@@ -30,6 +30,8 @@ import androidx.compose.ui.graphics.Brush
 
 import android.content.Intent
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalHapticFeedback
+import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 
 @Composable
 fun AirbnbCard(
@@ -39,6 +41,7 @@ fun AirbnbCard(
     onLikeClick: () -> Unit
 ) {
     val context = LocalContext.current
+    val haptic = LocalHapticFeedback.current
     val heartColor by animateColorAsState(
         targetValue = if (property.isLiked) Color.Red else Color.White.copy(alpha = 0.9f),
         animationSpec = tween(durationMillis = 300),
@@ -105,7 +108,10 @@ fun AirbnbCard(
 
                     // Like Button
                     Surface(
-                        onClick = onLikeClick,
+                        onClick = {
+                            haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+                            onLikeClick()
+                        },
                         modifier = Modifier.size(40.dp),
                         shape = CircleShape,
                         color = Color.Black.copy(alpha = 0.3f),

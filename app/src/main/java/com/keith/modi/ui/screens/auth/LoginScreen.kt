@@ -10,7 +10,12 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
+import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
+import androidx.compose.ui.platform.LocalFocusManager
+import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.*
@@ -45,12 +50,22 @@ fun LoginScreen(
     var selectedRole by remember { mutableStateOf(UserRole.CUSTOMER) }
 
     val authState by viewModel.authState.collectAsState()
+    val focusManager = LocalFocusManager.current
+
+    val performAction = {
+        when {
+            isForgotPassword -> viewModel.resetPassword(email)
+            isSignUp -> viewModel.signUp(email, password, name, selectedRole)
+            else -> viewModel.login(email, password)
+        }
+    }
 
     Column(
         modifier = Modifier
             .fillMaxSize()
             .background(MaterialTheme.colorScheme.background)
             .padding(24.dp)
+            .verticalScroll(rememberScrollState())
     ) {
         Spacer(modifier = Modifier.height(16.dp))
         
@@ -78,7 +93,7 @@ fun LoginScreen(
             }
         }
 
-        Spacer(modifier = Modifier.weight(1f))
+        Spacer(modifier = Modifier.height(40.dp))
 
         Column(
             modifier = Modifier.fillMaxWidth(),
@@ -108,7 +123,6 @@ fun LoginScreen(
             Spacer(modifier = Modifier.height(32.dp))
 
             if (isSignUp && !isForgotPassword) {
-                // PENDO: High-End Role Selection
                 Row(
                     modifier = Modifier.fillMaxWidth(),
                     horizontalArrangement = Arrangement.spacedBy(12.dp)
@@ -136,7 +150,9 @@ fun LoginScreen(
                     placeholder = { Text("Full Name", color = MaterialTheme.colorScheme.onSurfaceVariant) },
                     modifier = Modifier.fillMaxWidth(),
                     shape = RoundedCornerShape(16.dp),
-                    singleLine = true
+                    singleLine = true,
+                    keyboardOptions = KeyboardOptions(imeAction = ImeAction.Next),
+                    keyboardActions = KeyboardActions(onNext = { focusManager.moveFocus(androidx.compose.ui.focus.FocusDirection.Down) })
                 )
                 Spacer(modifier = Modifier.height(16.dp))
             }
@@ -147,7 +163,15 @@ fun LoginScreen(
                 placeholder = { Text("Email", color = MaterialTheme.colorScheme.onSurfaceVariant) },
                 modifier = Modifier.fillMaxWidth(),
                 shape = RoundedCornerShape(16.dp),
-                singleLine = true
+                singleLine = true,
+                keyboardOptions = KeyboardOptions(
+                    keyboardType = KeyboardType.Email,
+                    imeAction = if (isForgotPassword) ImeAction.Done else ImeAction.Next
+                ),
+                keyboardActions = KeyboardActions(
+                    onNext = { focusManager.moveFocus(androidx.compose.ui.focus.FocusDirection.Down) },
+                    onDone = { if (isForgotPassword) performAction() }
+                )
             )
 
             if (!isForgotPassword) {
@@ -170,7 +194,13 @@ fun LoginScreen(
                     shape = RoundedCornerShape(16.dp),
                     visualTransformation = if (isPasswordVisible) VisualTransformation.None else PasswordVisualTransformation(),
                     singleLine = true,
-                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password),
+                    keyboardOptions = KeyboardOptions(
+                        keyboardType = KeyboardType.Password,
+                        imeAction = ImeAction.Done
+                    ),
+                    keyboardActions = KeyboardActions(
+                        onDone = { performAction() }
+                    ),
                     supportingText = {
                         if (isSignUp && password.isNotEmpty()) {
                             val validation = com.keith.modi.utils.ValidationUtils.validatePassword(password)
@@ -209,13 +239,7 @@ fun LoginScreen(
             Spacer(modifier = Modifier.height(32.dp))
 
             Button(
-                onClick = {
-                    when {
-                        isForgotPassword -> viewModel.resetPassword(email)
-                        isSignUp -> viewModel.signUp(email, password, name, selectedRole)
-                        else -> viewModel.login(email, password)
-                    }
-                },
+                onClick = performAction,
                 modifier = Modifier.fillMaxWidth().height(56.dp),
                 shape = RoundedCornerShape(28.dp),
                 enabled = authState !is AuthState.Loading
@@ -257,9 +281,8 @@ fun LoginScreen(
             }
         }
 
-        Spacer(modifier = Modifier.weight(1f))
+        Spacer(modifier = Modifier.height(40.dp))
         
-        // PENDO: Secure Info/Error Banner
         AnimatedVisibility(visible = authState is AuthState.Error) {
             if (authState is AuthState.Error) {
                 Surface(
@@ -284,11 +307,36 @@ fun LoginScreen(
         }
     }
 
-    // PENDO: Check Email Information Overlay
     if (authState is AuthState.PasswordResetRequested) {
         CheckEmailOverlay(email) {
             viewModel.resetState()
             isForgotPassword = false
+        }
+    }
+}
+
+@Composable
+fun RoleCard(
+    title: String,
+    icon: androidx.compose.ui.graphics.vector.ImageVector,
+    isSelected: Boolean,
+    modifier: Modifier = Modifier,
+    onClick: () -> Unit
+) {
+    Surface(
+        modifier = modifier.height(100.dp).clickable { onClick() },
+        shape = RoundedCornerShape(16.dp),
+        color = if (isSelected) MaterialTheme.colorScheme.primaryContainer else MaterialTheme.colorScheme.surfaceVariant,
+        border = if (isSelected) androidx.compose.foundation.BorderStroke(2.dp, MaterialTheme.colorScheme.primary) else null
+    ) {
+        Column(
+            horizontalAlignment = Alignment.CenterHorizontally,
+            verticalArrangement = Arrangement.Center,
+            modifier = Modifier.padding(8.dp)
+        ) {
+            Icon(icon, null, tint = if (isSelected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant)
+            Spacer(Modifier.height(8.dp))
+            Text(title, fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Medium, textAlign = TextAlign.Center, fontSize = 14.sp)
         }
     }
 }
@@ -362,32 +410,6 @@ fun CheckEmailOverlay(email: String, onDismiss: () -> Unit) {
             ) {
                 Text("Back to Login", fontWeight = FontWeight.Bold)
             }
-        }
-    }
-}
-
-@Composable
-fun RoleCard(
-    title: String,
-    icon: androidx.compose.ui.graphics.vector.ImageVector,
-    isSelected: Boolean,
-    modifier: Modifier = Modifier,
-    onClick: () -> Unit
-) {
-    Surface(
-        modifier = modifier.height(100.dp).clickable { onClick() },
-        shape = RoundedCornerShape(16.dp),
-        color = if (isSelected) MaterialTheme.colorScheme.primaryContainer else MaterialTheme.colorScheme.surfaceVariant,
-        border = if (isSelected) androidx.compose.foundation.BorderStroke(2.dp, MaterialTheme.colorScheme.primary) else null
-    ) {
-        Column(
-            horizontalAlignment = Alignment.CenterHorizontally,
-            verticalArrangement = Arrangement.Center,
-            modifier = Modifier.padding(8.dp)
-        ) {
-            Icon(icon, null, tint = if (isSelected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant)
-            Spacer(Modifier.height(8.dp))
-            Text(title, fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Medium, textAlign = TextAlign.Center, fontSize = 14.sp)
         }
     }
 }
