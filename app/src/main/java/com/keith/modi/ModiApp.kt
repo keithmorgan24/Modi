@@ -81,8 +81,13 @@ fun ModiApp(mainViewModel: MainViewModel = viewModel()) {
                     else mainViewModel.showOfflineNotice()
                 },
                 onGuest = { 
-                    mainViewModel.setGuestMode(true)
-                    navController.navigate("main") 
+                    if (isOnline) {
+                        mainViewModel.setGuestMode(true)
+                        authViewModel.loginAnonymously()
+                    } else {
+                        mainViewModel.setGuestMode(true)
+                        navController.navigate("main")
+                    }
                 }
             )
         }
@@ -121,7 +126,13 @@ fun ModiApp(mainViewModel: MainViewModel = viewModel()) {
             EditProfileScreen(
                 onBack = { navController.popBackStack() },
                 mainViewModel = mainViewModel,
-                authViewModel = authViewModel
+                authViewModel = authViewModel,
+                onLoginRedirect = {
+                    mainViewModel.setGuestMode(false)
+                    navController.navigate("welcome") {
+                        popUpTo("main") { inclusive = true }
+                    }
+                }
             ) 
         }
         composable("share_app") { ShareAppScreen(onBack = { navController.popBackStack() }) }
@@ -140,7 +151,14 @@ fun ModiApp(mainViewModel: MainViewModel = viewModel()) {
         composable("privacy_security") { 
             PrivacySecurityScreen(
                 onBack = { navController.popBackStack() },
-                authViewModel = authViewModel
+                mainViewModel = mainViewModel,
+                authViewModel = authViewModel,
+                onLoginRedirect = {
+                    mainViewModel.setGuestMode(false)
+                    navController.navigate("welcome") {
+                        popUpTo("main") { inclusive = true }
+                    }
+                }
             ) 
         }
         composable("support") { SupportScreen(onBack = { navController.popBackStack() }) }
@@ -172,8 +190,13 @@ fun ModiApp(mainViewModel: MainViewModel = viewModel()) {
     LaunchedEffect(authState) {
         when (authState) {
             is AuthState.Success -> {
-                // PENDO: Ensure Guest Mode is DISABLED and data is synced
-                mainViewModel.setGuestMode(false)
+                // PENDO: Intelligent Session Promotion
+                // If we just logged in with a real account, clear any guest flags.
+                val user = Supabase.client.auth.currentUserOrNull()
+                if (user != null && user.email != null) {
+                    mainViewModel.setGuestMode(false)
+                }
+
                 mainViewModel.fetchUserProfile()
                 
                 // CRITICAL REDIRECT: Move home and wipe recovery/auth history

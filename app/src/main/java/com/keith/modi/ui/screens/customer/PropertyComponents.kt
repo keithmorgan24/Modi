@@ -88,7 +88,7 @@ fun AirbnbCard(
                         onClick = {
                             val shareIntent = Intent(Intent.ACTION_SEND).apply {
                                 type = "text/plain"
-                                val shareText = "Check out this amazing stay on Modi: ${property.title} in ${property.locationName} for only Ksh ${property.price}/night! \n\nDownload Modi to book: https://modiapp.com/download"
+                                val shareText = "Check out this amazing stay on Modi: ${property.title} in ${property.locationName} for only Ksh ${property.price}/night! \n\nBook it now: https://modiapp.com/property/${property.id}"
                                 putExtra(Intent.EXTRA_TEXT, shareText)
                             }
                             context.startActivity(Intent.createChooser(shareIntent, "Share Property"))

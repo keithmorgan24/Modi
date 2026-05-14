@@ -34,6 +34,7 @@ import androidx.compose.ui.tooling.preview.Preview
 import com.keith.modi.models.Property
 import com.keith.modi.models.PropertyState
 import com.keith.modi.models.PropertyViewModel
+import com.keith.modi.models.MainViewModel
 import com.keith.modi.models.Review
 import com.keith.modi.ui.theme.ModiTheme
 import com.keith.modi.ui.screens.customer.AirbnbCard
@@ -43,8 +44,12 @@ import kotlinx.coroutines.launch
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun ExploreScreen(viewModel: PropertyViewModel = viewModel()) {
+fun ExploreScreen(
+    viewModel: PropertyViewModel = viewModel(),
+    mainViewModel: MainViewModel = viewModel()
+) {
     val propertyState by viewModel.propertyState.collectAsState()
+    val isGuest by mainViewModel.isGuest.collectAsState()
     val scope = rememberCoroutineScope()
     
     var searchQuery by remember { mutableStateOf("") }
@@ -54,6 +59,11 @@ fun ExploreScreen(viewModel: PropertyViewModel = viewModel()) {
     var selectedProperty by remember { mutableStateOf<Property?>(null) }
     var showBookingSheet by remember { mutableStateOf(false) }
     var isMapView by remember { mutableStateOf(false) }
+
+    // Guest Prompt State
+    var showGuestPrompt by remember { mutableStateOf(false) }
+    var guestPromptMessage by remember { mutableStateOf("") }
+    var guestPromptAction by remember { mutableStateOf({}) }
 
     // PENDO: Intelligent Back Navigation - Intercept back press when Map is open
     BackHandler(enabled = isMapView) {
@@ -225,9 +235,10 @@ fun ExploreScreen(viewModel: PropertyViewModel = viewModel()) {
                                                 onClick = {
                                                     selectedProperty = property
                                                     showBookingSheet = true
-                                                    viewModel.createPendingBooking(property)
                                                 },
-                                                onLikeClick = { property.id?.let { viewModel.toggleLike(it) } }
+                                                onLikeClick = { 
+                                                    property.id?.let { viewModel.toggleLike(it) } 
+                                                }
                                             )
                                         }
                                     }
@@ -252,11 +263,46 @@ fun ExploreScreen(viewModel: PropertyViewModel = viewModel()) {
                     property = selectedProperty!!,
                     reviews = successState?.reviews?.get(selectedProperty!!.id) ?: emptyList(),
                     viewModel = viewModel,
+                    isGuest = isGuest,
                     onClose = { 
                         showBookingSheet = false 
+                    },
+                    onRegisterPrompt = {
+                        guestPromptMessage = "To save your data and to be able to post reviews and enjoy other features of Modi, kindly register/sign in."
+                        guestPromptAction = {
+                            mainViewModel.setGuestMode(false)
+                        }
+                        showGuestPrompt = true
                     }
                 )
             }
+        }
+
+        if (showGuestPrompt) {
+            AlertDialog(
+                onDismissRequest = { showGuestPrompt = false },
+                title = { Text("Registration Required", fontWeight = FontWeight.Bold) },
+                text = { Text(guestPromptMessage) },
+                confirmButton = {
+                    Button(onClick = { 
+                        showGuestPrompt = false
+                        guestPromptAction()
+                    }) {
+                        Text("Sign In / Register")
+                    }
+                },
+                dismissButton = {
+                    TextButton(onClick = { 
+                        showGuestPrompt = false
+                        // PENDO: If it was a booking prompt, allow them to proceed as guest
+                        if (guestPromptMessage.contains("save your data")) {
+                            selectedProperty?.let { viewModel.createPendingBooking(it) }
+                        }
+                    }) {
+                        Text("Later")
+                    }
+                }
+            )
         }
     }
 }
@@ -266,7 +312,9 @@ fun BookingSheetContent(
     property: Property,
     reviews: List<Review>,
     viewModel: PropertyViewModel,
-    onClose: () -> Unit
+    isGuest: Boolean,
+    onClose: () -> Unit,
+    onRegisterPrompt: () -> Unit
 ) {
     val propertyState by viewModel.propertyState.collectAsState()
     val successState = propertyState as? PropertyState.Success
@@ -328,7 +376,9 @@ fun BookingSheetContent(
         
         Button(
             onClick = { 
-                if (activeBooking != null) {
+                if (activeBooking == null) {
+                    viewModel.createPendingBooking(property)
+                } else {
                     viewModel.confirmBooking(activeBooking.id!!)
                     
                     // PENDO: Trigger Google Maps Navigation on success
@@ -345,8 +395,6 @@ fun BookingSheetContent(
                     }
                     
                     onClose()
-                } else {
-                    viewModel.createPendingBooking(property)
                 }
             },
             modifier = Modifier.fillMaxWidth().height(56.dp),
@@ -355,7 +403,7 @@ fun BookingSheetContent(
         ) {
             if (isBookingLoading) CircularProgressIndicator(modifier = Modifier.size(24.dp), color = Color.White)
             else if (property.isFull) Text("FULLY BOOKED 🔴", fontWeight = FontWeight.Bold)
-            else Text(if (activeBooking == null) "Secure My Room 🔒" else "Confirm Booking 🚀", fontWeight = FontWeight.Bold)
+            else Text(if (activeBooking == null) (if (isGuest) "Book as Guest 👤" else "Secure My Room 🔒") else "Confirm Booking 🚀", fontWeight = FontWeight.Bold)
         }
         TextButton(onClick = onClose, modifier = Modifier.fillMaxWidth()) { Text("Go Back", color = MaterialTheme.colorScheme.secondary) }
     }

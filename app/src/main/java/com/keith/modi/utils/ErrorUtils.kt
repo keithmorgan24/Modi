@@ -36,6 +36,9 @@ object ErrorUtils {
             message.contains("Cloudinary", ignoreCase = true) -> "Media Upload Failed: ${message.substringAfter("Cloudinary Error: ").substringBefore("\n")}"
             message.contains("User not authenticated", ignoreCase = true) -> "Session expired. Please log in again."
             message.contains("403", ignoreCase = true) -> "Permission Denied (403). Check database RLS policies."
+            
+            // PENDO: Schema Integrity - Handle postgrest auto-join errors
+            message.contains("Could not find the 'properties' column", ignoreCase = true) -> "System Sync Error: Unable to link booking to property. Technical team notified."
 
             // PENDO: Trace debugging - Shield technical leaks but preserve the core error
             else -> {

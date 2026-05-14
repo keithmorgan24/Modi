@@ -45,7 +45,7 @@ fun MainScaffold(
     val hostItems = listOf(Screen.Dashboard, Screen.MyAirbnbs, Screen.Profile)
     
     val items = when {
-        isGuest -> listOf(Screen.Explore, Screen.Profile)
+        isGuest -> customerItems
         currentRole == UserRole.HOST -> hostItems
         else -> customerItems
     }
@@ -102,7 +102,7 @@ fun MainScaffold(
             userScrollEnabled = true 
         ) { page ->
             when (items[page]) {
-                is Screen.Explore -> ExploreScreen()
+                is Screen.Explore -> ExploreScreen(mainViewModel = mainViewModel)
                 is Screen.Liked -> LikedScreen()
                 is Screen.Trips -> TripsScreen()
                 is Screen.Dashboard -> HostDashboardScreen()

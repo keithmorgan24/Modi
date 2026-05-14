@@ -199,18 +199,31 @@ class PropertyViewModel : ViewModel() {
                 _propertyState.value = currentState.copy(isBookingLoading = true, bookingError = null)
                 try {
                     val bookingId = UUID.randomUUID().toString()
+                    val expiresAtStr = (System.currentTimeMillis() + 3600000).toString()
+                    
+                    // PENDO: Data Integrity - Use buildJsonObject to avoid 'Any' serialization issues
+                    val bookingJson = buildJsonObject {
+                        put("id", bookingId)
+                        put("property_id", propertyId)
+                        put("guest_id", userId)
+                        put("status", "PENDING")
+                        put("expires_at", expiresAtStr)
+                        put("fee_paid", 0.0)
+                    }
+
+                    Supabase.client.postgrest["bookings"].insert(bookingJson)
+                    
                     val newBooking = Booking(
                         id = bookingId,
                         propertyId = propertyId,
                         guestId = userId,
                         status = "PENDING",
-                        expiresAt = (System.currentTimeMillis() + 3600000).toString(),
+                        expiresAt = expiresAtStr,
                         feePaid = 0.0
                     )
-                    Supabase.client.postgrest["bookings"].insert(newBooking)
                     _propertyState.value = currentState.copy(activeBooking = newBooking, isBookingLoading = false)
                 } catch (e: Exception) {
-                    _propertyState.value = currentState.copy(isBookingLoading = false, bookingError = "Unable to start booking flow.")
+                    _propertyState.value = currentState.copy(isBookingLoading = false, bookingError = ErrorUtils.sanitizeError(e))
                 }
             }
         }

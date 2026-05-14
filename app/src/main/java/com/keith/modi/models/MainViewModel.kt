@@ -76,9 +76,26 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     }
 
     init {
+        // PENDO: Pre-fetch session status for immediate UI consistency
+        updateGuestStatus()
         loadCachedProfile()
         observeSessionStatus()
         observeNetwork()
+    }
+
+    private fun updateGuestStatus() {
+        viewModelScope.launch {
+            val user = Supabase.client.auth.currentUserOrNull()
+            val isAnonymous = (user != null && user.email == null)
+            val persistentGuest = prefs.getBoolean("persistent_guest_mode", false)
+            
+            // PENDO: Data Integrity - Cross-reference session with persistent flag
+            _isGuest.value = isAnonymous || (persistentGuest && user == null)
+            
+            if (_isGuest.value) {
+                _userProfile.value = null
+            }
+        }
     }
 
     private fun observeNetwork() {
@@ -113,7 +130,9 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     }
 
     fun setGuestMode(isGuest: Boolean) {
+        println("[GUEST_DEBUG] setGuestMode called with: $isGuest")
         _isGuest.value = isGuest
+        prefs.edit { putBoolean("persistent_guest_mode", isGuest) }
         if (isGuest) {
             _userProfile.value = null
             clearCachedProfile()
@@ -134,6 +153,21 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         viewModelScope.launch {
             try {
                 val user = Supabase.client.auth.currentUserOrNull()
+                val isAnonymous = (user != null && user.email == null)
+                val persistentGuest = prefs.getBoolean("persistent_guest_mode", false)
+                
+                // PENDO: High-Security Guest State Determination
+                val resolvedGuestState = isAnonymous || (persistentGuest && user == null)
+                println("[GUEST_DEBUG] fetchUserProfile resolvedGuestState: $resolvedGuestState (isAnon: $isAnonymous, persistent: $persistentGuest)")
+                
+                _isGuest.value = resolvedGuestState
+
+                if (resolvedGuestState) {
+                    _userProfile.value = null
+                    clearCachedProfile()
+                    return@launch
+                }
+
                 val userId = user?.id
                 if (userId != null) {
                     try {
@@ -168,7 +202,6 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                             _currentRole.value = UserRole.CUSTOMER
                         }
                     }
-                    _isGuest.value = false
                 } else {
                     if (_isOnline.value) {
                         _userProfile.value = null

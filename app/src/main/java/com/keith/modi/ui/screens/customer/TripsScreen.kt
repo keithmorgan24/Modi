@@ -36,6 +36,7 @@ import coil.request.ImageRequest
 import com.keith.modi.models.Booking
 import com.keith.modi.models.BookingState
 import com.keith.modi.models.BookingViewModel
+import com.keith.modi.models.MainViewModel
 import com.keith.modi.ui.theme.ModiTheme
 import kotlinx.datetime.Instant
 import kotlinx.datetime.TimeZone
@@ -43,7 +44,9 @@ import kotlinx.datetime.toLocalDateTime
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun TripsScreen(bookingViewModel: BookingViewModel = viewModel()) {
+fun TripsScreen(
+    bookingViewModel: BookingViewModel = viewModel()
+) {
     var showReviewSheet by remember { mutableStateOf(false) }
     var selectedBooking by remember { mutableStateOf<Booking?>(null) }
     var showClearHistoryDialog by remember { mutableStateOf(false) }
@@ -57,7 +60,7 @@ fun TripsScreen(bookingViewModel: BookingViewModel = viewModel()) {
                     Text("My Trips", fontWeight = FontWeight.ExtraBold, letterSpacing = 0.5.sp) 
                 },
                 actions = {
-                    val hasTrips = (bookingState as? BookingState.Success)?.bookings?.any { it.status != "PENDING" } ?: false
+                    val hasTrips = (bookingState as? BookingState.Success)?.bookings?.isNotEmpty() ?: false
                     if (hasTrips) {
                         IconButton(onClick = { showClearHistoryDialog = true }) {
                             Icon(Icons.Default.DeleteSweep, "Clear All", tint = MaterialTheme.colorScheme.error)

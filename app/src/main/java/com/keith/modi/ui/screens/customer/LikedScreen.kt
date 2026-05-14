@@ -6,9 +6,7 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Favorite
 import androidx.compose.material3.*
-import androidx.compose.runtime.Composable
-import androidx.compose.runtime.collectAsState
-import androidx.compose.runtime.getValue
+import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontWeight
@@ -17,11 +15,14 @@ import androidx.compose.ui.unit.dp
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.keith.modi.models.PropertyState
 import com.keith.modi.models.PropertyViewModel
+import com.keith.modi.models.MainViewModel
 import com.keith.modi.ui.theme.ModiTheme
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun LikedScreen(viewModel: PropertyViewModel = viewModel()) {
+fun LikedScreen(
+    viewModel: PropertyViewModel = viewModel()
+) {
     val propertyState by viewModel.propertyState.collectAsState()
 
     val likedProperties = if (propertyState is PropertyState.Success) {
@@ -68,7 +69,9 @@ fun LikedScreen(viewModel: PropertyViewModel = viewModel()) {
                                 property = property,
                                 reviews = successState.reviews[property.id] ?: emptyList(),
                                 onClick = { /* TODO: Navigate to details */ },
-                                onLikeClick = { property.id?.let { viewModel.toggleLike(it) } }
+                                onLikeClick = { 
+                                    property.id?.let { viewModel.toggleLike(it) }
+                                }
                             )
                         }
                     }

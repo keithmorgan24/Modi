@@ -82,8 +82,10 @@ fun SettingsBaseScreen(
 fun EditProfileScreen(
     onBack: () -> Unit,
     mainViewModel: MainViewModel = viewModel(),
-    authViewModel: AuthViewModel = viewModel()
+    authViewModel: AuthViewModel = viewModel(),
+    onLoginRedirect: () -> Unit = {}
 ) {
+    val isGuest by mainViewModel.isGuest.collectAsState()
     val profile by mainViewModel.userProfile.collectAsState()
     val authState by authViewModel.authState.collectAsState()
     val context = LocalContext.current
@@ -114,98 +116,106 @@ fun EditProfileScreen(
     }
 
     SettingsBaseScreen("Personal Information", onBack) {
-        Column(
-            modifier = Modifier.verticalScroll(rememberScrollState()),
-            horizontalAlignment = Alignment.CenterHorizontally
-        ) {
-            Spacer(modifier = Modifier.height(24.dp))
-            
-            // Profile Picture Section
-            Box(contentAlignment = Alignment.BottomEnd) {
-                Surface(
-                    modifier = Modifier.size(120.dp),
-                    shape = CircleShape,
-                    color = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.2f)
-                ) {
-                    if (isUploading) {
-                        Box(contentAlignment = Alignment.Center) {
-                            CircularProgressIndicator(modifier = Modifier.size(40.dp))
+        if (isGuest) {
+            GuestRestrictionView(
+                title = "Profile Access Restricted",
+                message = "Personal information is only available for registered accounts. Join Modi to personalize your experience!",
+                onLoginRedirect = onLoginRedirect
+            )
+        } else {
+            Column(
+                modifier = Modifier.verticalScroll(rememberScrollState()),
+                horizontalAlignment = Alignment.CenterHorizontally
+            ) {
+                Spacer(modifier = Modifier.height(24.dp))
+                
+                // Profile Picture Section
+                Box(contentAlignment = Alignment.BottomEnd) {
+                    Surface(
+                        modifier = Modifier.size(120.dp),
+                        shape = CircleShape,
+                        color = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.2f)
+                    ) {
+                        if (isUploading) {
+                            Box(contentAlignment = Alignment.Center) {
+                                CircularProgressIndicator(modifier = Modifier.size(40.dp))
+                            }
+                        } else if (avatarUrl.isNotEmpty()) {
+                            AsyncImage(
+                                model = avatarUrl,
+                                contentDescription = "Avatar",
+                                modifier = Modifier.fillMaxSize().clip(CircleShape),
+                                contentScale = ContentScale.Crop
+                            )
+                        } else {
+                            Icon(
+                                Icons.Default.Person,
+                                contentDescription = null,
+                                modifier = Modifier.fillMaxSize().padding(24.dp),
+                                tint = MaterialTheme.colorScheme.primary
+                            )
                         }
-                    } else if (avatarUrl.isNotEmpty()) {
-                        AsyncImage(
-                            model = avatarUrl,
-                            contentDescription = "Avatar",
-                            modifier = Modifier.fillMaxSize().clip(CircleShape),
-                            contentScale = ContentScale.Crop
-                        )
-                    } else {
-                        Icon(
-                            Icons.Default.Person,
-                            contentDescription = null,
-                            modifier = Modifier.fillMaxSize().padding(24.dp),
-                            tint = MaterialTheme.colorScheme.primary
-                        )
+                    }
+                    
+                    FloatingActionButton(
+                        onClick = { photoPickerLauncher.launch("image/*") },
+                        modifier = Modifier.size(40.dp),
+                        shape = CircleShape,
+                        containerColor = MaterialTheme.colorScheme.primary,
+                        contentColor = MaterialTheme.colorScheme.onPrimary
+                    ) {
+                        Icon(Icons.Default.CameraAlt, contentDescription = "Change Photo", modifier = Modifier.size(20.dp))
                     }
                 }
+
+                Spacer(modifier = Modifier.height(32.dp))
                 
-                FloatingActionButton(
-                    onClick = { photoPickerLauncher.launch("image/*") },
-                    modifier = Modifier.size(40.dp),
-                    shape = CircleShape,
-                    containerColor = MaterialTheme.colorScheme.primary,
-                    contentColor = MaterialTheme.colorScheme.onPrimary
-                ) {
-                    Icon(Icons.Default.CameraAlt, contentDescription = "Change Photo", modifier = Modifier.size(20.dp))
-                }
-            }
-
-            Spacer(modifier = Modifier.height(32.dp))
-            
-            Text(
-                "Public Profile",
-                style = MaterialTheme.typography.titleMedium,
-                fontWeight = FontWeight.Bold,
-                modifier = Modifier.fillMaxWidth(),
-                textAlign = TextAlign.Start
-            )
-            
-            Spacer(modifier = Modifier.height(16.dp))
-
-            OutlinedTextField(
-                value = name,
-                onValueChange = { name = it },
-                label = { Text("Full Name") },
-                modifier = Modifier.fillMaxWidth(),
-                shape = RoundedCornerShape(16.dp),
-                singleLine = true,
-                leadingIcon = { Icon(Icons.Default.Badge, null) }
-            )
-
-            Spacer(modifier = Modifier.height(24.dp))
-
-            Button(
-                onClick = { authViewModel.updateFullName(name) },
-                modifier = Modifier.fillMaxWidth().height(56.dp),
-                shape = RoundedCornerShape(28.dp),
-                enabled = authState !is AuthState.Loading && name.isNotBlank() && !isUploading
-            ) {
-                if (authState is AuthState.Loading) {
-                    CircularProgressIndicator(color = MaterialTheme.colorScheme.onPrimary, modifier = Modifier.size(24.dp))
-                } else {
-                    Text("Save Changes", fontWeight = FontWeight.Bold)
-                }
-            }
-
-            if (authState is AuthState.Success) {
                 Text(
-                    (authState as AuthState.Success).message,
-                    color = Color(0xFF2E7D32),
-                    modifier = Modifier.padding(top = 16.dp),
-                    style = MaterialTheme.typography.bodySmall
+                    "Public Profile",
+                    style = MaterialTheme.typography.titleMedium,
+                    fontWeight = FontWeight.Bold,
+                    modifier = Modifier.fillMaxWidth(),
+                    textAlign = TextAlign.Start
                 )
+                
+                Spacer(modifier = Modifier.height(16.dp))
+
+                OutlinedTextField(
+                    value = name,
+                    onValueChange = { name = it },
+                    label = { Text("Full Name") },
+                    modifier = Modifier.fillMaxWidth(),
+                    shape = RoundedCornerShape(16.dp),
+                    singleLine = true,
+                    leadingIcon = { Icon(Icons.Default.Badge, null) }
+                )
+
+                Spacer(modifier = Modifier.height(24.dp))
+
+                Button(
+                    onClick = { authViewModel.updateFullName(name) },
+                    modifier = Modifier.fillMaxWidth().height(56.dp),
+                    shape = RoundedCornerShape(28.dp),
+                    enabled = authState !is AuthState.Loading && name.isNotBlank() && !isUploading
+                ) {
+                    if (authState is AuthState.Loading) {
+                        CircularProgressIndicator(color = MaterialTheme.colorScheme.onPrimary, modifier = Modifier.size(24.dp))
+                    } else {
+                        Text("Save Changes", fontWeight = FontWeight.Bold)
+                    }
+                }
+
+                if (authState is AuthState.Success) {
+                    Text(
+                        (authState as AuthState.Success).message,
+                        color = Color(0xFF2E7D32),
+                        modifier = Modifier.padding(top = 16.dp),
+                        style = MaterialTheme.typography.bodySmall
+                    )
+                }
+                
+                Spacer(modifier = Modifier.height(40.dp))
             }
-            
-            Spacer(modifier = Modifier.height(40.dp))
         }
     }
 }
@@ -313,8 +323,11 @@ fun NotificationsScreen(
 @Composable
 fun PrivacySecurityScreen(
     onBack: () -> Unit,
-    authViewModel: AuthViewModel = viewModel()
+    mainViewModel: MainViewModel = viewModel(),
+    authViewModel: AuthViewModel = viewModel(),
+    onLoginRedirect: () -> Unit = {}
 ) {
+    val isGuest by mainViewModel.isGuest.collectAsState()
     val scrollState = rememberScrollState()
     var showDeleteDialog by remember { mutableStateOf(false) }
     var currentPassword by remember { mutableStateOf("") }
@@ -342,116 +355,162 @@ fun PrivacySecurityScreen(
     }
 
     SettingsBaseScreen("Privacy & Security", onBack) {
-        Column(modifier = Modifier.verticalScroll(scrollState)) {
-            Spacer(modifier = Modifier.height(10.dp))
-            
-            Text("Security Status", fontWeight = FontWeight.Bold, fontSize = 18.sp, color = MaterialTheme.colorScheme.primary)
-            Spacer(modifier = Modifier.height(16.dp))
-
-            Card(
-                modifier = Modifier.fillMaxWidth(),
-                shape = RoundedCornerShape(24.dp),
-                colors = CardDefaults.cardColors(containerColor = Color(0xFFE8F5E9))
-            ) {
-                Row(modifier = Modifier.padding(20.dp), verticalAlignment = Alignment.CenterVertically) {
-                    Icon(Icons.Default.VerifiedUser, null, tint = Color(0xFF2E7D32), modifier = Modifier.size(32.dp))
-                    Spacer(modifier = Modifier.width(16.dp))
-                    Column {
-                        Text("Account Secured", fontWeight = FontWeight.Bold, color = Color(0xFF2E7D32))
-                        Text("Your data is protected by AES-256 encryption.", style = MaterialTheme.typography.labelSmall, color = Color(0xFF2E7D32).copy(alpha = 0.8f))
-                    }
-                }
-            }
-
-            Spacer(modifier = Modifier.height(32.dp))
-
-            Text("Update Password", fontWeight = FontWeight.Bold, fontSize = 18.sp)
-            Spacer(modifier = Modifier.height(16.dp))
-
-            OutlinedTextField(
-                value = currentPassword,
-                onValueChange = { currentPassword = it },
-                label = { Text("Current Password") },
-                modifier = Modifier.fillMaxWidth(),
-                shape = RoundedCornerShape(16.dp),
-                singleLine = true,
-                visualTransformation = PasswordVisualTransformation(),
-                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password)
+        if (isGuest) {
+            GuestRestrictionView(
+                title = "Security Settings Locked",
+                message = "Privacy and security management is only available for registered accounts. Create an account to secure your data.",
+                onLoginRedirect = onLoginRedirect
             )
+        } else {
+            Column(modifier = Modifier.verticalScroll(scrollState)) {
+                Spacer(modifier = Modifier.height(10.dp))
+                
+                Text("Security Status", fontWeight = FontWeight.Bold, fontSize = 18.sp, color = MaterialTheme.colorScheme.primary)
+                Spacer(modifier = Modifier.height(16.dp))
 
-            Spacer(modifier = Modifier.height(12.dp))
-
-            OutlinedTextField(
-                value = newPassword,
-                onValueChange = { newPassword = it },
-                label = { Text("New Password") },
-                modifier = Modifier.fillMaxWidth(),
-                shape = RoundedCornerShape(16.dp),
-                singleLine = true,
-                visualTransformation = PasswordVisualTransformation(),
-                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password),
-                supportingText = {
-                    if (newPassword.isNotEmpty()) {
-                        val validation = com.keith.modi.utils.ValidationUtils.validatePassword(newPassword)
-                        if (validation is com.keith.modi.utils.ValidationUtils.ValidationResult.Error) {
-                            Text(
-                                text = validation.message,
-                                color = MaterialTheme.colorScheme.error,
-                                style = MaterialTheme.typography.labelSmall
-                            )
-                        } else {
-                            Text(
-                                text = "Strong Password ✨",
-                                color = Color(0xFF2E7D32),
-                                style = MaterialTheme.typography.labelSmall
-                            )
+                Card(
+                    modifier = Modifier.fillMaxWidth(),
+                    shape = RoundedCornerShape(24.dp),
+                    colors = CardDefaults.cardColors(containerColor = Color(0xFFE8F5E9))
+                ) {
+                    Row(modifier = Modifier.padding(20.dp), verticalAlignment = Alignment.CenterVertically) {
+                        Icon(Icons.Default.VerifiedUser, null, tint = Color(0xFF2E7D32), modifier = Modifier.size(32.dp))
+                        Spacer(modifier = Modifier.width(16.dp))
+                        Column {
+                            Text("Account Secured", fontWeight = FontWeight.Bold, color = Color(0xFF2E7D32))
+                            Text("Your data is protected by AES-256 encryption.", style = MaterialTheme.typography.labelSmall, color = Color(0xFF2E7D32).copy(alpha = 0.8f))
                         }
                     }
                 }
-            )
 
-            Spacer(modifier = Modifier.height(24.dp))
+                Spacer(modifier = Modifier.height(32.dp))
 
-            Button(
-                onClick = { 
-                    authViewModel.updatePasswordWithVerification(currentPassword, newPassword)
-                    currentPassword = ""
-                    newPassword = ""
-                },
-                modifier = Modifier.fillMaxWidth().height(56.dp),
-                shape = RoundedCornerShape(28.dp),
-                enabled = authState !is AuthState.Loading && currentPassword.isNotBlank() && newPassword.length >= 6
-            ) {
-                if (authState is AuthState.Loading) {
-                    CircularProgressIndicator(color = MaterialTheme.colorScheme.onPrimary, modifier = Modifier.size(24.dp))
-                } else {
-                    Text("Securely Update Password", fontWeight = FontWeight.Bold)
-                }
-            }
+                Text("Update Password", fontWeight = FontWeight.Bold, fontSize = 18.sp)
+                Spacer(modifier = Modifier.height(16.dp))
 
-            if (authState is AuthState.Error && (authState as AuthState.Error).message.contains("password", true)) {
-                Text(
-                    (authState as AuthState.Error).message,
-                    color = MaterialTheme.colorScheme.error,
-                    style = MaterialTheme.typography.labelSmall,
-                    modifier = Modifier.padding(top = 8.dp)
+                OutlinedTextField(
+                    value = currentPassword,
+                    onValueChange = { currentPassword = it },
+                    label = { Text("Current Password") },
+                    modifier = Modifier.fillMaxWidth(),
+                    shape = RoundedCornerShape(16.dp),
+                    singleLine = true,
+                    visualTransformation = PasswordVisualTransformation(),
+                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password)
                 )
+
+                Spacer(modifier = Modifier.height(12.dp))
+
+                OutlinedTextField(
+                    value = newPassword,
+                    onValueChange = { newPassword = it },
+                    label = { Text("New Password") },
+                    modifier = Modifier.fillMaxWidth(),
+                    shape = RoundedCornerShape(16.dp),
+                    singleLine = true,
+                    visualTransformation = PasswordVisualTransformation(),
+                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password),
+                    supportingText = {
+                        if (newPassword.isNotEmpty()) {
+                            val validation = com.keith.modi.utils.ValidationUtils.validatePassword(newPassword)
+                            if (validation is com.keith.modi.utils.ValidationUtils.ValidationResult.Error) {
+                                Text(
+                                    text = validation.message,
+                                    color = MaterialTheme.colorScheme.error,
+                                    style = MaterialTheme.typography.labelSmall
+                                )
+                            } else {
+                                Text(
+                                    text = "Strong Password ✨",
+                                    color = Color(0xFF2E7D32),
+                                    style = MaterialTheme.typography.labelSmall
+                                )
+                            }
+                        }
+                    }
+                )
+
+                Spacer(modifier = Modifier.height(24.dp))
+
+                Button(
+                    onClick = { 
+                        authViewModel.updatePasswordWithVerification(currentPassword, newPassword)
+                        currentPassword = ""
+                        newPassword = ""
+                    },
+                    modifier = Modifier.fillMaxWidth().height(56.dp),
+                    shape = RoundedCornerShape(28.dp),
+                    enabled = authState !is AuthState.Loading && currentPassword.isNotBlank() && newPassword.length >= 6
+                ) {
+                    if (authState is AuthState.Loading) {
+                        CircularProgressIndicator(color = MaterialTheme.colorScheme.onPrimary, modifier = Modifier.size(24.dp))
+                    } else {
+                        Text("Securely Update Password", fontWeight = FontWeight.Bold)
+                    }
+                }
+
+                if (authState is AuthState.Error && (authState as AuthState.Error).message.contains("password", true)) {
+                    Text(
+                        (authState as AuthState.Error).message,
+                        color = MaterialTheme.colorScheme.error,
+                        style = MaterialTheme.typography.labelSmall,
+                        modifier = Modifier.padding(top = 8.dp)
+                    )
+                }
+
+                Spacer(modifier = Modifier.height(40.dp))
+
+                Text("Account Actions", fontWeight = FontWeight.Bold, fontSize = 18.sp, color = MaterialTheme.colorScheme.error)
+                Spacer(modifier = Modifier.height(16.dp))
+
+                SecurityActionItem(
+                    icon = Icons.Default.DeleteForever,
+                    title = "Request Account Deletion",
+                    subtitle = "Permanently remove your account and data",
+                    onClick = { showDeleteDialog = true },
+                    isDangerous = true
+                )
+                
+                Spacer(modifier = Modifier.height(40.dp))
             }
+        }
+    }
+}
 
-            Spacer(modifier = Modifier.height(40.dp))
-
-            Text("Account Actions", fontWeight = FontWeight.Bold, fontSize = 18.sp, color = MaterialTheme.colorScheme.error)
-            Spacer(modifier = Modifier.height(16.dp))
-
-            SecurityActionItem(
-                icon = Icons.Default.DeleteForever,
-                title = "Request Account Deletion",
-                subtitle = "Permanently remove your account and data",
-                onClick = { showDeleteDialog = true },
-                isDangerous = true
-            )
-            
-            Spacer(modifier = Modifier.height(40.dp))
+@Composable
+fun GuestRestrictionView(
+    title: String,
+    message: String,
+    onLoginRedirect: () -> Unit
+) {
+    Column(
+        modifier = Modifier.fillMaxSize(),
+        horizontalAlignment = Alignment.CenterHorizontally,
+        verticalArrangement = Arrangement.Center
+    ) {
+        Icon(
+            Icons.Default.Lock, 
+            null, 
+            modifier = Modifier.size(80.dp), 
+            tint = MaterialTheme.colorScheme.primary.copy(alpha = 0.5f)
+        )
+        Spacer(Modifier.height(24.dp))
+        Text(
+            text = title, 
+            style = MaterialTheme.typography.headlineSmall, 
+            fontWeight = FontWeight.Bold,
+            color = MaterialTheme.colorScheme.onBackground
+        )
+        Text(
+            text = message,
+            textAlign = TextAlign.Center,
+            modifier = Modifier.padding(horizontal = 32.dp, vertical = 12.dp),
+            style = MaterialTheme.typography.bodyMedium,
+            color = MaterialTheme.colorScheme.onSurfaceVariant
+        )
+        Spacer(Modifier.height(32.dp))
+        Button(onClick = onLoginRedirect, shape = RoundedCornerShape(16.dp)) {
+            Text("Login or Sign Up")
         }
     }
 }

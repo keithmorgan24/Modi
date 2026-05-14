@@ -209,12 +209,14 @@ fun ProfileContent(
             colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.3f))
         ) {
             Column(modifier = Modifier.padding(8.dp)) {
-                ProfileMenuItem(
-                    icon = Icons.Default.Person,
-                    title = "Personal Information",
-                    subtitle = "Update your name and profile photo",
-                    onClick = { handleAction("edit_profile") }
-                )
+        if (!isGuest) {
+            ProfileMenuItem(
+                icon = Icons.Default.Person,
+                title = "Personal Information",
+                subtitle = "Update your name and profile photo",
+                onClick = { handleAction("edit_profile") }
+            )
+        }
                 
                 if (profile?.role == "HOST") {
                     ProfileMenuItem(
@@ -248,16 +250,18 @@ fun ProfileContent(
                 ProfileMenuItem(
                     icon = Icons.Default.NotificationsNone,
                     title = "Notifications",
-                    subtitle = "Stay updated with your bookings",
+                    subtitle = if (isGuest) "Sign in to see updates" else "Stay updated with your bookings",
                     onClick = { handleAction("notifications") }
                 )
                 
-                ProfileMenuItem(
-                    icon = Icons.Default.Shield,
-                    title = "Privacy & Security",
-                    subtitle = "Manage your data and security",
-                    onClick = { handleAction("privacy_security") }
-                )
+                if (!isGuest) {
+                    ProfileMenuItem(
+                        icon = Icons.Default.Shield,
+                        title = "Privacy & Security",
+                        subtitle = "Manage your data and security",
+                        onClick = { handleAction("privacy_security") }
+                    )
+                }
 
                 ProfileMenuItem(
                     icon = Icons.AutoMirrored.Filled.HelpOutline,

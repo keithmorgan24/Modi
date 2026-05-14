@@ -51,16 +51,30 @@ class AuthViewModel : ViewModel() {
         viewModelScope.launch {
             _authState.value = AuthState.Loading
             try {
-                Supabase.client.auth.signUpWith(Email) {
-                    this.email = email
-                    password = pass
-                    // This data goes into raw_user_meta_data which our SQL trigger reads
-                    data = buildJsonObject {
-                        put("full_name", name)
-                        put("role", role.name)
+                val currentUser = Supabase.client.auth.currentUserOrNull()
+                if (currentUser != null && currentUser.email == null) {
+                    // PENDO: Data Transfer - Convert Anonymous user to permanent to keep Uid & Data
+                    Supabase.client.auth.updateUser {
+                        this.email = email
+                        this.password = pass
+                        data = buildJsonObject {
+                            put("full_name", name)
+                            put("role", role.name)
+                        }
                     }
+                    _authState.value = AuthState.Success("Account created! Your guest data has been synced.")
+                } else {
+                    Supabase.client.auth.signUpWith(Email) {
+                        this.email = email
+                        password = pass
+                        // This data goes into raw_user_meta_data which our SQL trigger reads
+                        data = buildJsonObject {
+                            put("full_name", name)
+                            put("role", role.name)
+                        }
+                    }
+                    _authState.value = AuthState.Success("Check your email for confirmation!")
                 }
-                _authState.value = AuthState.Success("Check your email for confirmation!")
             } catch (e: Exception) {
                 _authState.value = AuthState.Error(ErrorUtils.sanitizeError(e))
             }
@@ -80,6 +94,18 @@ class AuthViewModel : ViewModel() {
                     password = pass
                 }
                 _authState.value = AuthState.Success("Logged in successfully!")
+            } catch (e: Exception) {
+                _authState.value = AuthState.Error(ErrorUtils.sanitizeError(e))
+            }
+        }
+    }
+
+    fun loginAnonymously() {
+        viewModelScope.launch {
+            _authState.value = AuthState.Loading
+            try {
+                Supabase.client.auth.signInAnonymously()
+                _authState.value = AuthState.Success("Welcome Guest!")
             } catch (e: Exception) {
                 _authState.value = AuthState.Error(ErrorUtils.sanitizeError(e))
             }
