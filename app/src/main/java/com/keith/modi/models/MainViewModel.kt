@@ -44,6 +44,9 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     private val _isOnline = MutableStateFlow(NetworkUtils.isNetworkAvailable(application))
     val isOnline: StateFlow<Boolean> = _isOnline.asStateFlow()
 
+    private val _isMapViewActive = MutableStateFlow(false)
+    val isMapViewActive: StateFlow<Boolean> = _isMapViewActive.asStateFlow()
+
     private val _showOfflineDialog = MutableStateFlow(false)
     val showOfflineDialog: StateFlow<Boolean> = _showOfflineDialog.asStateFlow()
 

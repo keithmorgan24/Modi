@@ -2,6 +2,7 @@ package com.keith.modi.ui.screens.customer
 
 import android.Manifest
 import android.content.pm.PackageManager
+import android.widget.Toast
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.animation.AnimatedVisibility
@@ -32,8 +33,10 @@ import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
 import androidx.lifecycle.compose.LocalLifecycleOwner
 import com.keith.modi.models.Property
+import kotlinx.coroutines.delay
 import org.osmdroid.config.Configuration
 import org.osmdroid.tileprovider.tilesource.TileSourceFactory
+import org.osmdroid.util.BoundingBox
 import org.osmdroid.util.GeoPoint
 import org.osmdroid.views.MapView
 import org.osmdroid.views.overlay.Marker
@@ -51,17 +54,27 @@ fun MapScreen(
 ) {
     val context = LocalContext.current
     val lifecycleOwner = LocalLifecycleOwner.current
+    val scope = rememberCoroutineScope()
 
-    // PENDO: Cyber Security & Performance Config
-    LaunchedEffect(Unit) {
+    // PENDO: Persistent Centering Control
+    var isMapInitialized by remember { mutableStateOf(false) }
+    var lastPropertyCount by remember { mutableIntStateOf(0) }
+    var isFollowingUser by remember { mutableStateOf(false) }
+
+    // PENDO: High-Security Map Configuration - Fixed Early Initialization
+    // We initialize the config BEFORE creating the MapView to prevent glitches
+    remember {
         with(Configuration.getInstance()) {
-            userAgentValue = "${context.packageName} (Modi-Secure-OSM-v2)"
+            userAgentValue = "${context.packageName} (Modi-Secure-OSM-v3)"
+            load(context, context.getSharedPreferences("osmdroid", android.content.Context.MODE_PRIVATE))
+            
             val cacheDir = File(context.cacheDir, "osm_tiles_secure")
             if (!cacheDir.exists()) cacheDir.mkdirs()
             osmdroidTileCache = cacheDir
             tileDownloadThreads = 8.toShort()
             tileFileSystemCacheMaxBytes = 750L * 1024 * 1024
         }
+        true
     }
 
     var hasLocationPermission by remember {
@@ -82,13 +95,20 @@ fun MapScreen(
             setTileSource(TileSourceFactory.MAPNIK)
             setMultiTouchControls(true)
             zoomController.setVisibility(org.osmdroid.views.CustomZoomButtonsController.Visibility.NEVER)
-            controller.setZoom(15.0)
+            
+            // PENDO: Optimized Touch Routing for Compose
+            // This ensures the map handles touches before any parent Pagers or Listeners
+            isClickable = true
+            isFocusable = true
+            isFocusableInTouchMode = true
+            
+            minZoomLevel = 3.0
+            maxZoomLevel = 20.0
+            setScrollableAreaLimitDouble(null)
             
             val rotationGestureOverlay = RotationGestureOverlay(this)
             rotationGestureOverlay.isEnabled = true
             overlays.add(rotationGestureOverlay)
-            
-            setHasTransientState(true)
         }
     }
 
@@ -96,6 +116,18 @@ fun MapScreen(
         MyLocationNewOverlay(GpsMyLocationProvider(context), mapView).apply {
             enableMyLocation()
             setDrawAccuracyEnabled(true)
+        }
+    }
+
+    // PENDO: Intelligent Follow-Mode Management
+    // Stops following the user if they manually pan the map
+    LaunchedEffect(mapView) {
+        mapView.setOnTouchListener { _, _ ->
+            if (isFollowingUser) {
+                locationOverlay.disableFollowLocation()
+                isFollowingUser = false
+            }
+            false
         }
     }
 
@@ -135,10 +167,27 @@ fun MapScreen(
         properties.filter { it.latitude != null && it.longitude != null && (it.latitude != 0.0 || it.longitude != 0.0) }
     }
 
+    // PENDO: Intelligent Auto-Centering Logic
     LaunchedEffect(mapProperties) {
         if (mapProperties.isNotEmpty()) {
-            val first = mapProperties.first()
-            mapView.controller.animateTo(GeoPoint(first.latitude!!, first.longitude!!), 15.0, 1500L)
+            // Only auto-center if it's the first initialization OR the property set has changed significantly
+            if (!isMapInitialized || mapProperties.size != lastPropertyCount) {
+                delay(500)
+                if (mapProperties.size == 1) {
+                    val first = mapProperties.first()
+                    mapView.controller.animateTo(GeoPoint(first.latitude!!, first.longitude!!), 15.0, 1000L)
+                } else {
+                    // Fit all markers in view
+                    val points = mapProperties.map { p -> 
+                        val fuzzy = p.getFuzzyLocation()
+                        GeoPoint(fuzzy.latitude, fuzzy.longitude) 
+                    }
+                    val bbox = BoundingBox.fromGeoPoints(points)
+                    mapView.zoomToBoundingBox(bbox.increaseByScale(1.2f), true)
+                }
+                isMapInitialized = true
+                lastPropertyCount = mapProperties.size
+            }
         }
     }
 
@@ -165,14 +214,18 @@ fun MapScreen(
                 modifier = Modifier.fillMaxSize(),
                 factory = { mapView },
                 update = { view ->
-                    // Performance: Only update markers if data changed
+                    // Performance: Smart Diffing for Markers using relatedObject
                     val currentMarkers = view.overlays.filterIsInstance<Marker>()
-                    if (currentMarkers.size != mapProperties.size) {
+                    val currentMarkerIds = currentMarkers.mapNotNull { it.relatedObject as? String }.toSet()
+                    val dataPropertyIds = mapProperties.mapNotNull { it.id }.toSet()
+
+                    if (currentMarkerIds != dataPropertyIds) {
                         view.overlays.removeAll { it is Marker }
                         
                         mapProperties.forEach { property ->
                             val fuzzy = property.getFuzzyLocation()
                             val marker = Marker(view)
+                            marker.relatedObject = property.id // PENDO: Safe ID storage
                             marker.position = GeoPoint(fuzzy.latitude, fuzzy.longitude)
                             marker.title = property.title
                             marker.snippet = "Ksh ${property.price}"
@@ -190,35 +243,56 @@ fun MapScreen(
                 }
             )
 
-            // MODERN FLOATING UI CONTROLS
-            Column(
-                modifier = Modifier
-                    .align(Alignment.BottomEnd)
-                    .padding(16.dp),
-                verticalArrangement = Arrangement.spacedBy(12.dp)
-            ) {
-                // Locate Me Button - Now with intelligent permission triggering
-                FloatingActionButton(
-                    onClick = {
-                        if (hasLocationPermission) {
-                            val myLoc = locationOverlay.myLocation
-                            if (myLoc != null) {
-                                mapView.controller.animateTo(myLoc, 16.5, 1000L)
-                            } else {
-                                // Provide haptic feedback or toast if GPS is still locking
-                                mapView.controller.animateTo(GeoPoint(-1.286389, 36.817223), 15.0, 1000L)
+    // MODERN FLOATING UI CONTROLS
+    Column(
+        modifier = Modifier
+            .align(Alignment.BottomEnd)
+            .padding(16.dp),
+        verticalArrangement = Arrangement.spacedBy(12.dp)
+    ) {
+        // Locate Me Button - Improved Fix for "Not working as expected"
+        FloatingActionButton(
+            onClick = {
+                if (hasLocationPermission) {
+                    val myLoc = locationOverlay.myLocation
+                    if (myLoc != null) {
+                        mapView.controller.animateTo(myLoc, 17.5, 1000L)
+                        locationOverlay.enableFollowLocation()
+                        isFollowingUser = true
+                    } else {
+                        // Intelligent Lock: Enable and wait for first fix
+                        val success = locationOverlay.enableMyLocation()
+                        if (success) {
+                            Toast.makeText(context, "Acquiring GPS fix... 📡", Toast.LENGTH_SHORT).show()
+                            locationOverlay.runOnFirstFix {
+                                mapView.post {
+                                    val loc = locationOverlay.myLocation
+                                    if (loc != null) {
+                                        mapView.controller.animateTo(loc, 17.5, 1000L)
+                                        locationOverlay.enableFollowLocation()
+                                        isFollowingUser = true
+                                    }
+                                }
                             }
                         } else {
-                            permissionLauncher.launch(Manifest.permission.ACCESS_FINE_LOCATION)
+                            Toast.makeText(context, "Location services are disabled", Toast.LENGTH_LONG).show()
                         }
-                    },
-                    containerColor = MaterialTheme.colorScheme.surface,
-                    contentColor = if (hasLocationPermission) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.secondary,
-                    shape = CircleShape,
-                    modifier = Modifier.size(56.dp)
-                ) {
-                    Icon(Icons.Default.MyLocation, "Locate Me")
+                    }
+                } else {
+                    permissionLauncher.launch(Manifest.permission.ACCESS_FINE_LOCATION)
                 }
+            },
+            containerColor = if (isFollowingUser) MaterialTheme.colorScheme.primaryContainer else MaterialTheme.colorScheme.surface,
+            contentColor = if (hasLocationPermission) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.secondary,
+            shape = CircleShape,
+            modifier = Modifier.size(56.dp)
+        ) {
+            Icon(
+                imageVector = Icons.Default.MyLocation,
+                contentDescription = "Locate Me",
+                tint = if (isFollowingUser) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface
+            )
+        }
 
                 // Custom Zoom Controls
                 Card(

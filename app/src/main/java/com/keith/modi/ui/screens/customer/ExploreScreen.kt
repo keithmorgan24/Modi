@@ -50,7 +50,8 @@ import kotlinx.coroutines.launch
 @Composable
 fun ExploreScreen(
     viewModel: PropertyViewModel = viewModel(),
-    mainViewModel: MainViewModel = viewModel()
+    mainViewModel: MainViewModel = viewModel(),
+    onMapToggle: (Boolean) -> Unit = {}
 ) {
     val propertyState by viewModel.propertyState.collectAsState()
     val isGuest by mainViewModel.isGuest.collectAsState()
@@ -69,6 +70,11 @@ fun ExploreScreen(
     var showGuestPrompt by remember { mutableStateOf(false) }
     var guestPromptMessage by remember { mutableStateOf("") }
     var guestPromptAction by remember { mutableStateOf({}) }
+
+    // PENDO: Sync Map State with Parent (e.g., to disable Pager swiping)
+    LaunchedEffect(isMapView) {
+        onMapToggle(isMapView)
+    }
 
     // PENDO: Intelligent Back Navigation - Intercept back press when Map is open
     BackHandler(enabled = isMapView) {

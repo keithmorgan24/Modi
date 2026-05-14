@@ -54,10 +54,17 @@ fun MainScaffold(
     val scope = rememberCoroutineScope()
     val isOnline by mainViewModel.isOnline.collectAsState()
 
+    // PENDO: Intelligent Pager Blocking - Prevent swiping when Map is active
+    var isMapActive by remember { mutableStateOf(false) }
+
     // PENDO: Intelligent Back Navigation - If not on the first tab, go to Explore first
-    BackHandler(enabled = pagerState.currentPage != 0) {
-        scope.launch {
-            pagerState.animateScrollToPage(0)
+    BackHandler(enabled = pagerState.currentPage != 0 || isMapActive) {
+        if (isMapActive) {
+            // ExploreScreen handles its own back press to close map
+        } else {
+            scope.launch {
+                pagerState.animateScrollToPage(0)
+            }
         }
     }
 
@@ -99,10 +106,13 @@ fun MainScaffold(
             state = pagerState,
             modifier = Modifier.padding(innerPadding),
             beyondViewportPageCount = 1,
-            userScrollEnabled = true 
+            userScrollEnabled = !isMapActive || items[pagerState.currentPage] != Screen.Explore
         ) { page ->
             when (items[page]) {
-                is Screen.Explore -> ExploreScreen(mainViewModel = mainViewModel)
+                is Screen.Explore -> ExploreScreen(
+                    mainViewModel = mainViewModel,
+                    onMapToggle = { isMapActive = it }
+                )
                 is Screen.Liked -> LikedScreen()
                 is Screen.Trips -> TripsScreen()
                 is Screen.Dashboard -> HostDashboardScreen()
