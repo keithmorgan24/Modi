@@ -1,30 +1,18 @@
-# Modi Production Proguard Rules
+# Cloudinary uses Glide and Picasso optionally.
+# Since we are using Coil, we can tell R8 to ignore these missing classes.
+-dontwarn com.cloudinary.android.download.glide.**
+-dontwarn com.cloudinary.android.download.picasso.**
 
-# PENDO: Shield Kotlin Serialization
--keepattributes *Annotation*, EnclosingMethod, InnerClasses, Signature
--keepclassmembers class ** {
-    @kotlinx.serialization.Serializable *;
-}
--keepclassmembers class ** {
-    @kotlinx.serialization.SerialName *;
-}
--keep class kotlinx.serialization.json.** { *; }
+# Ktor/Supabase - Ignore missing Java Management classes (not available on Android)
+-dontwarn java.lang.management.**
+-dontwarn javax.management.**
 
-# PENDO: Protect Supabase & Ktor (Networking)
+# Ensure Supabase/Ktor classes are handled correctly
+-keepattributes Signature, InnerClasses, AnnotationDefault, EnclosingMethod
 -keep class io.github.jan.supabase.** { *; }
 -keep class io.ktor.** { *; }
--keep class okhttp3.** { *; }
--keepattributes RuntimeVisibleAnnotations, RuntimeVisibleParameterAnnotations
 
-# PENDO: Protect Cloudinary & Coil (Images)
--keep class com.cloudinary.** { *; }
--keep class coil.** { *; }
-
-# PENDO: Protect Google Maps
--keep class com.google.android.gms.maps.** { *; }
--keep class com.google.android.libraries.maps.** { *; }
-
-# General safety
--dontwarn io.github.jan.supabase.**
--dontwarn io.ktor.**
--dontwarn kotlinx.serialization.**
+# Serialization
+-keepclassmembers class * {
+    @kotlinx.serialization.SerialName <fields>;
+}

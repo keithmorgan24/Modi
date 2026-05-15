@@ -60,7 +60,7 @@ fun ShareAppScreen(onBack: () -> Unit) {
     val snackbarHostState = remember { SnackbarHostState() }
     
     // PENDO: Professional distribution link management
-    var appLink by remember { mutableStateOf("https://beztonodgfvlrxzyxkxb.supabase.co/storage/v1/object/public/app-releases/modi.apk") }
+    var appLink by remember { mutableStateOf("https://beztonodgfvlrxzyxkxb.supabase.co/storage/v1/object/public/app-distribution/modi_v1_0.apk") }
     var latestRelease by remember { mutableStateOf<AppRelease?>(null) }
     var isLoadingLink by remember { mutableStateOf(true) }
     
@@ -77,10 +77,10 @@ fun ShareAppScreen(onBack: () -> Unit) {
             
             if (release != null) {
                 latestRelease = release
-                appLink = Supabase.client.storage["app-releases"].publicUrl(release.apkPath)
+                appLink = Supabase.client.storage["app-distribution"].publicUrl(release.apkPath)
             } else {
                 // PENDO: Silent fallback to default link if table is empty or RLS is active
-                appLink = "https://beztonodgfvlrxzyxkxb.supabase.co/storage/v1/object/public/app-releases/modi.apk"
+                appLink = "https://beztonodgfvlrxzyxkxb.supabase.co/storage/v1/object/public/app-distribution/modi_v1_0.apk"
                 println("[SUPABASE] No release info found. Using fallback link.")
             }
         } catch (e: Exception) {

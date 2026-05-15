@@ -1,5 +1,8 @@
 package com.keith.modi
 
+import android.content.Intent
+import android.net.Uri
+import androidx.compose.ui.Modifier
 import androidx.compose.runtime.*
 import androidx.navigation.compose.*
 import com.keith.modi.models.*
@@ -162,6 +165,57 @@ fun ModiApp(mainViewModel: MainViewModel = viewModel()) {
             ) 
         }
         composable("support") { SupportScreen(onBack = { navController.popBackStack() }) }
+    }
+
+    // PENDO: Intelligent Update Dialog
+    val appRelease by mainViewModel.appRelease.collectAsState()
+    appRelease?.let { release ->
+        AlertDialog(
+            onDismissRequest = { if (!release.isCritical) mainViewModel.dismissUpdateDialog() },
+            icon = { Icon(Icons.Default.WifiOff, null, tint = MaterialTheme.colorScheme.primary) }, // Using a generic icon or could use system_update
+            title = { Text("Update Available", fontWeight = FontWeight.Bold) },
+            text = {
+                Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                    Text(
+                        "A new version of Modi (${release.versionName}) is available. We recommend downloading the latest version to avoid inconveniences.",
+                        textAlign = TextAlign.Center
+                    )
+                    if (!release.releaseNotes.isNullOrBlank()) {
+                        Spacer(modifier = Modifier.height(8.dp))
+                        Text(
+                            "What's New:",
+                            fontWeight = FontWeight.Bold,
+                            fontSize = 14.sp,
+                            modifier = Modifier.fillMaxWidth()
+                        )
+                        Text(
+                            release.releaseNotes,
+                            fontSize = 13.sp,
+                            modifier = Modifier.fillMaxWidth(),
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    }
+                }
+            },
+            confirmButton = {
+                Button(
+                    onClick = {
+                        mainViewModel.dismissUpdateDialog() // PENDO: Dismiss prompt immediately on click
+                        val intent = Intent(Intent.ACTION_VIEW, Uri.parse(release.apkPath))
+                        context.startActivity(intent)
+                    }
+                ) {
+                    Text("Update Now")
+                }
+            },
+            dismissButton = {
+                if (!release.isCritical) {
+                    TextButton(onClick = { mainViewModel.dismissUpdateDialog() }) {
+                        Text("Later")
+                    }
+                }
+            }
+        )
     }
 
     // PENDO: Intelligent Offline Dialog

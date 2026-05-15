@@ -35,6 +35,9 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     private val _userProfile = MutableStateFlow<Profile?>(null)
     val userProfile: StateFlow<Profile?> = _userProfile.asStateFlow()
 
+    private val _appRelease = MutableStateFlow<AppRelease?>(null)
+    val appRelease: StateFlow<AppRelease?> = _appRelease.asStateFlow()
+
     private val _currentRole = MutableStateFlow(UserRole.CUSTOMER)
     val currentRole: StateFlow<UserRole> = _currentRole.asStateFlow()
 
@@ -84,6 +87,45 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         loadCachedProfile()
         observeSessionStatus()
         observeNetwork()
+        checkForUpdates()
+    }
+
+    private fun checkForUpdates() {
+        viewModelScope.launch {
+            try {
+                // PENDO: Fetch the latest release from Supabase
+                // Ensure you have an 'app_releases' table with 'version_code' column
+                val releases = Supabase.client.postgrest["app_releases"]
+                    .select {
+                        filter {
+                            // Optionally add filters here
+                        }
+                    }
+                    .decodeList<AppRelease>()
+                
+                val latestRelease = releases.maxByOrNull { it.versionCode }
+                
+                val context = getApplication<Application>()
+                val packageInfo = context.packageManager.getPackageInfo(context.packageName, 0)
+                val currentVersionCode = if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.P) {
+                    packageInfo.longVersionCode.toInt()
+                } else {
+                    @Suppress("DEPRECATION")
+                    packageInfo.versionCode
+                }
+
+                if (latestRelease != null && latestRelease.versionCode > currentVersionCode) {
+                    println("[UPDATE] New version found: ${latestRelease.versionName} (${latestRelease.versionCode})")
+                    _appRelease.value = latestRelease
+                }
+            } catch (e: Exception) {
+                println("[UPDATE] Check failed: ${e.message}")
+            }
+        }
+    }
+
+    fun dismissUpdateDialog() {
+        _appRelease.value = null
     }
 
     private fun updateGuestStatus() {

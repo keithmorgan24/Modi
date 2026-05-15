@@ -13,7 +13,7 @@ android {
     defaultConfig {
         applicationId = "com.keith.modi"
         minSdk = 24
-        targetSdk = 36
+        targetSdk = 35
         versionCode = 1
         versionName = "1.0"
 
@@ -36,8 +36,8 @@ android {
 
     buildTypes {
         release {
-            isMinifyEnabled = true // PENDO: Enable R8 Obfuscation for Production
-            isShrinkResources = true
+            isMinifyEnabled = false // Temporarily disable for debugging the "Invalid Package" error
+            isShrinkResources = false
             proguardFiles(
                 getDefaultProguardFile("proguard-android-optimize.txt"),
                 "proguard-rules.pro"
