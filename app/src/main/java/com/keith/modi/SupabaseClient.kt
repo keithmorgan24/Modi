@@ -1,6 +1,7 @@
 package com.keith.modi
 
 import android.content.Context
+import android.content.SharedPreferences
 import androidx.security.crypto.EncryptedSharedPreferences
 import androidx.security.crypto.MasterKey
 import io.github.jan.supabase.createSupabaseClient
@@ -29,7 +30,6 @@ object Supabase {
         ) {
             httpEngine = OkHttp.create()
             
-            // PENDO: Data Integrity - Ignore unknown backend fields to prevent crashes during schema updates
             defaultSerializer = io.github.jan.supabase.serializer.KotlinXSerializer(Json { 
                 ignoreUnknownKeys = true 
                 coerceInputValues = true
@@ -38,7 +38,13 @@ object Supabase {
 
             install(Postgrest)
             install(Auth) {
-                sessionManager = SecureSessionManager(context)
+                // PENDO: Intelligent Session Recovery
+                try {
+                    sessionManager = SecureSessionManager(context)
+                } catch (e: Exception) {
+                    println("[SECURITY] SecureSessionManager failed: ${e.message}")
+                    // Supabase will use its default SessionManager if we don't assign one here
+                }
             }
             install(Realtime)
             install(Storage)
@@ -47,22 +53,22 @@ object Supabase {
     }
 }
 
-/**
- * PENDO: Military-Grade Session Persistence
- * Uses AES-256 encryption to protect session tokens at rest.
- */
 class SecureSessionManager(context: Context) : SessionManager {
-    private val masterKey = MasterKey.Builder(context)
-        .setKeyScheme(MasterKey.KeyScheme.AES256_GCM)
-        .build()
-    
-    private val prefs = EncryptedSharedPreferences.create(
-        context,
-        "modi_secure_session",
-        masterKey,
-        EncryptedSharedPreferences.PrefKeyEncryptionScheme.AES256_SIV,
-        EncryptedSharedPreferences.PrefValueEncryptionScheme.AES256_GCM
-    )
+    private val prefs: SharedPreferences = try {
+        val masterKey = MasterKey.Builder(context)
+            .setKeyScheme(MasterKey.KeyScheme.AES256_GCM)
+            .build()
+        
+        EncryptedSharedPreferences.create(
+            context,
+            "modi_secure_session",
+            masterKey,
+            EncryptedSharedPreferences.PrefKeyEncryptionScheme.AES256_SIV,
+            EncryptedSharedPreferences.PrefValueEncryptionScheme.AES256_GCM
+        )
+    } catch (e: Exception) {
+        context.getSharedPreferences("modi_session_fallback", Context.MODE_PRIVATE)
+    }
 
     private val json = Json { ignoreUnknownKeys = true }
 

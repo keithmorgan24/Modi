@@ -36,6 +36,7 @@ import androidx.compose.ui.tooling.preview.Preview
 import androidx.core.app.ShareCompat
 import androidx.core.content.FileProvider
 import com.google.zxing.BarcodeFormat
+import com.keith.modi.BuildConfig
 import com.keith.modi.Supabase
 import com.keith.modi.models.AppRelease
 import io.github.jan.supabase.postgrest.postgrest
@@ -59,8 +60,11 @@ fun ShareAppScreen(onBack: () -> Unit) {
     val scope = rememberCoroutineScope()
     val snackbarHostState = remember { SnackbarHostState() }
     
-    // PENDO: Professional distribution link management
-    var appLink by remember { mutableStateOf("https://beztonodgfvlrxzyxkxb.supabase.co/storage/v1/object/public/app-distribution/modi_v1_0.apk") }
+    // PENDO: Professional distribution link management - Constructing dynamically from Config
+    val baseUrl = BuildConfig.SUPABASE_URL.removeSuffix("/")
+    val fallbackLink = "$baseUrl/storage/v1/object/public/app-distribution/modi_v1_0.apk"
+    
+    var appLink by remember { mutableStateOf(fallbackLink) }
     var latestRelease by remember { mutableStateOf<AppRelease?>(null) }
     var isLoadingLink by remember { mutableStateOf(true) }
     
@@ -77,10 +81,15 @@ fun ShareAppScreen(onBack: () -> Unit) {
             
             if (release != null) {
                 latestRelease = release
-                appLink = Supabase.client.storage["app-distribution"].publicUrl(release.apkPath)
+                // PENDO: Intelligent path resolution - handles both full URLs and storage paths
+                appLink = if (release.apkPath.startsWith("http")) {
+                    release.apkPath
+                } else {
+                    Supabase.client.storage["app-distribution"].publicUrl(release.apkPath)
+                }
             } else {
-                // PENDO: Silent fallback to default link if table is empty or RLS is active
-                appLink = "https://beztonodgfvlrxzyxkxb.supabase.co/storage/v1/object/public/app-distribution/modi_v1_0.apk"
+                // PENDO: Dynamic fallback link construction
+                appLink = fallbackLink
                 println("[SUPABASE] No release info found. Using fallback link.")
             }
         } catch (e: Exception) {

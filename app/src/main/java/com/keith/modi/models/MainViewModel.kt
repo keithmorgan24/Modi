@@ -16,6 +16,8 @@ import com.keith.modi.utils.NetworkUtils
 import io.github.jan.supabase.auth.auth
 import io.github.jan.supabase.auth.status.SessionStatus
 import io.github.jan.supabase.postgrest.postgrest
+import io.github.jan.supabase.postgrest.query.Order
+import io.github.jan.supabase.storage.storage
 import io.github.jan.supabase.realtime.PostgresAction
 import io.github.jan.supabase.realtime.channel
 import io.github.jan.supabase.realtime.decodeRecord
@@ -55,18 +57,22 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
 
     private val json = Json { ignoreUnknownKeys = true }
     
-    // PENDO: Encrypted Cache for User Profile
-    private val masterKey = MasterKey.Builder(application)
-        .setKeyScheme(MasterKey.KeyScheme.AES256_GCM)
-        .build()
+    // PENDO: Fail-Safe Cache Initialization
+    private val prefs: android.content.SharedPreferences = try {
+        val masterKey = MasterKey.Builder(application)
+            .setKeyScheme(MasterKey.KeyScheme.AES256_GCM)
+            .build()
 
-    private val prefs = EncryptedSharedPreferences.create(
-        application,
-        "modi_cache",
-        masterKey,
-        EncryptedSharedPreferences.PrefKeyEncryptionScheme.AES256_SIV,
-        EncryptedSharedPreferences.PrefValueEncryptionScheme.AES256_GCM
-    )
+        EncryptedSharedPreferences.create(
+            application,
+            "modi_cache",
+            masterKey,
+            EncryptedSharedPreferences.PrefKeyEncryptionScheme.AES256_SIV,
+            EncryptedSharedPreferences.PrefValueEncryptionScheme.AES256_GCM
+        )
+    } catch (e: Exception) {
+        application.getSharedPreferences("modi_cache_fallback", android.content.Context.MODE_PRIVATE)
+    }
 
     private val networkCallback = object : ConnectivityManager.NetworkCallback() {
         override fun onAvailable(network: Network) {
@@ -93,18 +99,26 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     private fun checkForUpdates() {
         viewModelScope.launch {
             try {
-                // PENDO: Fetch the latest release from Supabase
-                // Ensure you have an 'app_releases' table with 'version_code' column
-                val releases = Supabase.client.postgrest["app_releases"]
-                    .select {
-                        filter {
-                            // Optionally add filters here
+                // PENDO: Robust query for the latest release, ordering by version then creation date
+                val latestRelease = try {
+                    Supabase.client.postgrest["app_releases"]
+                        .select {
+                            order("version_code", Order.DESCENDING)
+                            order("created_at", Order.DESCENDING)
+                            limit(1)
                         }
-                    }
-                    .decodeList<AppRelease>()
+                        .decodeList<AppRelease>()
+                        .firstOrNull()
+                } catch (e: Exception) {
+                    println("[UPDATE] Query failed: ${e.message}")
+                    null
+                }
                 
-                val latestRelease = releases.maxByOrNull { it.versionCode }
-                
+                if (latestRelease == null) {
+                    println("[UPDATE] No release information found in database.")
+                    return@launch
+                }
+
                 val context = getApplication<Application>()
                 val packageInfo = context.packageManager.getPackageInfo(context.packageName, 0)
                 val currentVersionCode = if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.P) {
@@ -114,12 +128,32 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                     packageInfo.versionCode
                 }
 
-                if (latestRelease != null && latestRelease.versionCode > currentVersionCode) {
-                    println("[UPDATE] New version found: ${latestRelease.versionName} (${latestRelease.versionCode})")
-                    _appRelease.value = latestRelease
+                println("[UPDATE] Local version: $currentVersionCode, Remote version: ${latestRelease.versionCode}")
+
+                if (latestRelease.versionCode > currentVersionCode) {
+                    // PENDO: Intelligent URL resolution - Ensure the APK path is a valid public URL
+                    val resolvedPath = if (latestRelease.apkPath.startsWith("http")) {
+                        latestRelease.apkPath
+                    } else {
+                        try {
+                            Supabase.client.storage["app-distribution"].publicUrl(latestRelease.apkPath)
+                        } catch (e: Exception) {
+                            println("[UPDATE] Storage resolution failed: ${e.message}")
+                            latestRelease.apkPath // Fallback to raw path
+                        }
+                    }
+                    
+                    val finalizedRelease = latestRelease.copy(apkPath = resolvedPath)
+                    
+                    println("[UPDATE] New version found: ${finalizedRelease.versionName} (${finalizedRelease.versionCode})")
+                    _appRelease.value = finalizedRelease
+                } else {
+                    println("[UPDATE] App is up to date.")
+                    _appRelease.value = null
                 }
             } catch (e: Exception) {
                 println("[UPDATE] Check failed: ${e.message}")
+                e.printStackTrace()
             }
         }
     }

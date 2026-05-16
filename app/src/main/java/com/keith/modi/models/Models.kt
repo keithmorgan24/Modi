@@ -17,6 +17,7 @@ enum class UserRole {
 data class Profile(
     val id: String,
     @SerialName("full_name") val fullName: String? = null,
+    val email: String? = null,
     val role: String = "CUSTOMER",
     @SerialName("avatar_url") val avatarUrl: String? = null,
     @SerialName("is_kyc_verified") val isKycVerified: Boolean = false,
@@ -88,7 +89,9 @@ data class Booking(
     val status: String = "PENDING",
     @SerialName("expires_at") val expiresAt: String = "",
     @SerialName("fee_paid") val feePaid: Double = 0.0,
-    @SerialName("properties") val property: Property? = null
+    @SerialName("properties") val property: Property? = null,
+    @SerialName("profiles") val guestProfile: Profile? = null,
+    @SerialName("created_at") val createdAt: String? = null
 )
 
 @Serializable

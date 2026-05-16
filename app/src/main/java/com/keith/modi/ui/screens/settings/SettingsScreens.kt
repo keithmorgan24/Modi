@@ -337,20 +337,44 @@ fun PrivacySecurityScreen(
     if (showDeleteDialog) {
         AlertDialog(
             onDismissRequest = { showDeleteDialog = false },
-            title = { Text("Delete Account") },
-            text = { Text("Are you absolutely sure? This will permanently remove your account and all associated data from Modi. This action cannot be undone.") },
+            icon = { Icon(Icons.Default.Warning, null, tint = MaterialTheme.colorScheme.error, modifier = Modifier.size(48.dp)) },
+            title = { 
+                Text(
+                    "DANGER: Permanent Deletion", 
+                    fontWeight = FontWeight.Black, 
+                    color = MaterialTheme.colorScheme.error,
+                    textAlign = TextAlign.Center
+                ) 
+            },
+            text = { 
+                Column {
+                    Text(
+                        "You are about to permanently destroy your Modi account.",
+                        fontWeight = FontWeight.Bold,
+                        textAlign = TextAlign.Center
+                    )
+                    Spacer(Modifier.height(12.dp))
+                    Text(
+                        "• All your Airbnbs will be delisted.\n• Your booking history will be wiped.\n• You will LOSE access to your earnings data.\n\nThis action is irreversible. Our support team cannot recover this data.",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
+            },
             confirmButton = {
-                TextButton(
+                Button(
                     onClick = {
                         authViewModel.requestAccountDeletion()
                         showDeleteDialog = false
                     },
-                    colors = ButtonDefaults.textButtonColors(contentColor = MaterialTheme.colorScheme.error)
-                ) { Text("Delete Permanently") }
+                    colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.error),
+                    shape = RoundedCornerShape(12.dp)
+                ) { Text("I Understand, Delete Everything", fontWeight = FontWeight.ExtraBold) }
             },
             dismissButton = {
-                TextButton(onClick = { showDeleteDialog = false }) { Text("Cancel") }
-            }
+                TextButton(onClick = { showDeleteDialog = false }) { Text("Cancel", fontWeight = FontWeight.Bold) }
+            },
+            shape = RoundedCornerShape(28.dp)
         )
     }
 

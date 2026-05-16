@@ -9,9 +9,15 @@ object ErrorUtils {
         // PENDO SECURITY: Never suppress cancellation, let it propagate naturally
         if (e is CancellationException) throw e
 
-        // PENDO: SECURITY FIRST - Strip tokens but reveal the technical heart of the issue
+        // PENDO: SECURITY FIRST - Strip tokens and API keys but reveal the technical heart of the issue
         var message = e.message ?: ""
+        
+        // Mask Authorization Bearer tokens
         message = message.replace(Regex("Bearer\\s+[a-zA-Z0-9\\-_\\.]+"), "[TOKEN MASKED]")
+        // Mask apikey in headers (handles both apikey=value and apikey=[value])
+        message = message.replace(Regex("apikey=\\[?[a-zA-Z0-9\\-_\\.]+\\]?"), "apikey=[MASKED]")
+        // Mask any potential Authorization header content that isn't caught by Bearer
+        message = message.replace(Regex("Authorization=\\[?[a-zA-Z0-9\\-_\\.\\s]+\\]?"), "Authorization=[MASKED]")
         
         return when {
             message.contains("Invalid login credentials", ignoreCase = true) -> "Invalid email or password"

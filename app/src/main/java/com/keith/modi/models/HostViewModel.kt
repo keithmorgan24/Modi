@@ -12,6 +12,7 @@ import io.github.jan.supabase.postgrest.postgrest
 import io.github.jan.supabase.realtime.realtime
 import io.github.jan.supabase.realtime.channel
 import io.github.jan.supabase.realtime.postgresListDataFlow
+import kotlinx.datetime.Clock
 import kotlinx.serialization.json.add
 import kotlinx.serialization.json.buildJsonObject
 import kotlinx.serialization.json.put
@@ -29,7 +30,7 @@ import kotlin.collections.get
 sealed class HostListingState {
     object Idle : HostListingState()
     object Loading : HostListingState()
-    object Success : HostListingState()
+    data class Success(val message: String? = null) : HostListingState()
     data class Error(val message: String) : HostListingState()
 }
 
@@ -62,17 +63,19 @@ class HostViewModel : ViewModel() {
     private fun setupRealtime() {
         viewModelScope.launch {
             try {
-                val channel = Supabase.client.realtime.channel("bookings-changes")
+                // PENDO: Listen for ANY changes in the bookings table
+                val channel = Supabase.client.realtime.channel("host-bookings-realtime")
                 channel.postgresListDataFlow<Booking, String?>(
                     schema = "public",
                     table = "bookings",
                     primaryKey = Booking::id
                 ).collectLatest { _ ->
+                    // Whenever any booking changes (status update), refresh the stats
                     fetchStats()
                 }
                 channel.subscribe()
             } catch (e: Exception) {
-                // Realtime failed
+                println("[REALTIME] Booking listener failed: ${e.message}")
             }
         }
     }
@@ -122,24 +125,54 @@ class HostViewModel : ViewModel() {
     fun fetchStats() {
         viewModelScope.launch {
             try {
-                val userId = Supabase.client.auth.currentUserOrNull()?.id
-                if (userId != null) {
-                    val bookings = Supabase.client.postgrest["bookings"]
-                        .select(columns = io.github.jan.supabase.postgrest.query.Columns.raw("*, properties!inner(*)")) {
-                            filter {
-                                eq("properties.host_id", userId)
-                            }
-                        }.decodeList<Booking>()
-                    
-                    val myPendingBookings = bookings.filter { it.status == "PENDING" }
-                    _pendingBookings.value = myPendingBookings
-                    _pendingBookingsCount.value = myPendingBookings.size
-
-                    val confirmedBookings = bookings.filter { it.status == "CONFIRMED" }
-                    _totalEarnings.value = confirmedBookings.sumOf { it.feePaid ?: 0.0 }
+                val userId = Supabase.client.auth.currentUserOrNull()?.id ?: return@launch
+                
+                // 1. Fetch Host properties first to filter bookings securely
+                val myProps = Supabase.client.postgrest["properties"]
+                    .select { filter { eq("host_id", userId) } }
+                    .decodeList<Property>()
+                
+                val myPropIds = myProps.mapNotNull { it.id }
+                if (myPropIds.isEmpty()) {
+                    _pendingBookings.value = emptyList()
+                    _pendingBookingsCount.value = 0
+                    _totalEarnings.value = 0.0
+                    return@launch
                 }
+
+                // 2. Fetch only bookings related to this host's properties
+                val hostBookingsRaw = Supabase.client.postgrest["bookings"]
+                    .select { 
+                        filter { isIn("property_id", myPropIds) }
+                        order("created_at", order = io.github.jan.supabase.postgrest.query.Order.DESCENDING)
+                    }
+                    .decodeList<Booking>()
+
+                // 3. Fetch Guest profiles only for these specific bookings
+                val guestIds = hostBookingsRaw.map { it.guestId }.distinct()
+                val profiles = if (guestIds.isNotEmpty()) {
+                    Supabase.client.postgrest["profiles"]
+                        .select { filter { isIn("id", guestIds) } }
+                        .decodeList<Profile>()
+                } else emptyList()
+
+                // 4. Intelligence Mapping
+                val hostBookings = hostBookingsRaw.map { booking ->
+                    val linkedProp = myProps.find { it.id == booking.propertyId }
+                    val guestProfile = profiles.find { it.id == booking.guestId }
+                    booking.copy(property = linkedProp, guestProfile = guestProfile)
+                }
+
+                println("[DEBUG] Mapped ${hostBookings.size} bookings with profiles")
+                
+                _pendingBookings.value = hostBookings
+                _pendingBookingsCount.value = hostBookings.count { it.status == "PENDING" }
+
+                val confirmedOrArrived = hostBookings.filter { it.status == "CONFIRMED" || it.status == "ARRIVED" }
+                _totalEarnings.value = confirmedOrArrived.sumOf { it.feePaid ?: 0.0 }
+                
             } catch (e: Exception) {
-                // Handle error
+                println("[DEBUG] fetchStats error: ${e.message}")
             }
         }
     }
@@ -246,7 +279,7 @@ class HostViewModel : ViewModel() {
                 Supabase.client.postgrest["properties"].insert(newProperty)
                 
                 _myProperties.value += newProperty
-                _listingState.value = HostListingState.Success
+                _listingState.value = HostListingState.Success("Listing '$sanitizedName' created successfully!")
             } catch (e: Throwable) {
                 // PENDO: Explicitly handle CancellationException to avoid overriding it
                 if (e is kotlinx.coroutines.CancellationException) throw e
@@ -256,38 +289,92 @@ class HostViewModel : ViewModel() {
         }
     }
 
-    fun approveBooking(bookingId: String) {
+    fun approveBooking(booking: Booking) {
+        val bookingId = booking.id ?: return
+        val guestName = booking.guestProfile?.fullName ?: "Guest"
         viewModelScope.launch {
             _listingState.value = HostListingState.Loading
             try {
                 Supabase.client.postgrest["bookings"].update(
                     buildJsonObject { put("status", "CONFIRMED") }
                 ) {
-                    filter {
-                        eq("id", bookingId)
-                    }
+                    filter { eq("id", bookingId) }
                 }
+                // The Realtime listener will trigger fetchStats automatically, 
+                // but we call it here for instant feedback.
                 fetchStats()
-                _listingState.value = HostListingState.Success
+                _listingState.value = HostListingState.Success("Approved $guestName successfully!")
             } catch (e: Exception) {
                 _listingState.value = HostListingState.Error(ErrorUtils.sanitizeError(e))
             }
         }
     }
 
-    fun rejectBooking(bookingId: String) {
+    fun markAsArrived(booking: Booking) {
+        val bookingId = booking.id ?: return
+        val guestName = booking.guestProfile?.fullName ?: "Guest"
+        viewModelScope.launch {
+            _listingState.value = HostListingState.Loading
+            try {
+                Supabase.client.postgrest["bookings"].update(
+                    buildJsonObject { 
+                        put("status", "ARRIVED") 
+                        put("checked_in_at", Clock.System.now().toString())
+                    }
+                ) {
+                    filter { eq("id", bookingId) }
+                }
+                fetchStats()
+                _listingState.value = HostListingState.Success("$guestName has arrived! Check-in confirmed.")
+            } catch (e: Exception) {
+                _listingState.value = HostListingState.Error(ErrorUtils.sanitizeError(e))
+            }
+        }
+    }
+
+    fun rejectBooking(booking: Booking) {
+        val bookingId = booking.id ?: return
+        val guestName = booking.guestProfile?.fullName ?: "Guest"
         viewModelScope.launch {
             _listingState.value = HostListingState.Loading
             try {
                 Supabase.client.postgrest["bookings"].update(
                     buildJsonObject { put("status", "CANCELLED") }
                 ) {
-                    filter {
-                        eq("id", bookingId)
-                    }
+                    filter { eq("id", bookingId) }
                 }
                 fetchStats()
-                _listingState.value = HostListingState.Success
+                _listingState.value = HostListingState.Success("Rejected $guestName's request.")
+            } catch (e: Exception) {
+                _listingState.value = HostListingState.Error(ErrorUtils.sanitizeError(e))
+            }
+        }
+    }
+
+    fun clearBookingsByCategory(status: String) {
+        viewModelScope.launch {
+            _listingState.value = HostListingState.Loading
+            try {
+                val userId = Supabase.client.auth.currentUserOrNull()?.id ?: return@launch
+                
+                // 1. Get properties owned by this host to ensure they only clear THEIR data
+                val myProps = Supabase.client.postgrest["properties"]
+                    .select { filter { eq("host_id", userId) } }
+                    .decodeList<Property>()
+                
+                val myPropIds = myProps.mapNotNull { it.id }
+                if (myPropIds.isEmpty()) return@launch
+
+                // 2. Delete bookings for those properties with the specific status
+                Supabase.client.postgrest["bookings"].delete {
+                    filter {
+                        isIn("property_id", myPropIds)
+                        eq("status", status)
+                    }
+                }
+                
+                fetchStats()
+                _listingState.value = HostListingState.Success("Category $status cleared successfully.")
             } catch (e: Exception) {
                 _listingState.value = HostListingState.Error(ErrorUtils.sanitizeError(e))
             }
@@ -352,7 +439,7 @@ class HostViewModel : ViewModel() {
                         tags = sanitizedTags
                     ) else it
                 }
-                _listingState.value = HostListingState.Success
+                _listingState.value = HostListingState.Success("Property updated successfully!")
             } catch (e: Exception) {
                 _listingState.value = HostListingState.Error(ErrorUtils.sanitizeError(e))
             }

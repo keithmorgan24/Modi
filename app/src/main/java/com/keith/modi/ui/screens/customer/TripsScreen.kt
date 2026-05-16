@@ -153,7 +153,6 @@ fun SyncErrorView(message: String, onRetry: () -> Unit) {
             color = MaterialTheme.colorScheme.errorContainer.copy(alpha = 0.5f),
             shape = RoundedCornerShape(12.dp)
         ) {
-            // SECURITY: Only show first 100 chars to avoid leaking sensitive header data in screenshot
             Text(
                 text = message.take(150) + if(message.length > 150) "..." else "",
                 textAlign = TextAlign.Center,
@@ -270,7 +269,8 @@ fun TripCard(booking: Booking, onReviewClick: () -> Unit) {
                 }
 
                 val (color, bg) = when(booking.status?.uppercase()) {
-                    "CONFIRMED" -> Color(0xFF2E7D32) to Color(0xFFE8F5E9).copy(alpha = 0.15f)
+                    "ARRIVED" -> Color(0xFF2E7D32) to Color(0xFFE8F5E9).copy(alpha = 0.15f)
+                    "CONFIRMED" -> MaterialTheme.colorScheme.primary to MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.15f)
                     "PENDING" -> Color(0xFFEF6C00) to Color(0xFFFFF3E0).copy(alpha = 0.15f)
                     else -> Color(0xFFC62828) to Color(0xFFFFEBEE).copy(alpha = 0.15f)
                 }
@@ -291,8 +291,13 @@ fun TripCard(booking: Booking, onReviewClick: () -> Unit) {
                 }
             }
 
-            if (booking.status?.uppercase() == "CONFIRMED") {
-                Spacer(modifier = Modifier.height(16.dp))
+            Spacer(modifier = Modifier.height(16.dp))
+            
+            // PENDO: Intelligent Review Control
+            // We show the review button if the Host has approved (CONFIRMED) or marked as ARRIVED
+            val canReview = booking.status?.uppercase() == "ARRIVED" || booking.status?.uppercase() == "CONFIRMED"
+            
+            if (canReview) {
                 Button(
                     onClick = onReviewClick,
                     modifier = Modifier.fillMaxWidth().height(48.dp),
@@ -301,7 +306,28 @@ fun TripCard(booking: Booking, onReviewClick: () -> Unit) {
                 ) {
                     Icon(Icons.Default.Star, null, modifier = Modifier.size(18.dp))
                     Spacer(modifier = Modifier.width(8.dp))
-                    Text("Verify & Review", fontWeight = FontWeight.Bold)
+                    Text("Write Verified Review", fontWeight = FontWeight.Bold)
+                }
+            } else if (booking.status?.uppercase() == "PENDING") {
+                Surface(
+                    modifier = Modifier.fillMaxWidth(),
+                    shape = RoundedCornerShape(14.dp),
+                    color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f)
+                ) {
+                    Row(
+                        modifier = Modifier.padding(12.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.Center
+                    ) {
+                        Icon(Icons.Default.HourglassBottom, null, modifier = Modifier.size(16.dp), tint = MaterialTheme.colorScheme.outline)
+                        Spacer(modifier = Modifier.width(8.dp))
+                        Text(
+                            "Review available after Host approval",
+                            style = MaterialTheme.typography.labelSmall,
+                            color = MaterialTheme.colorScheme.outline,
+                            fontWeight = FontWeight.Bold
+                        )
+                    }
                 }
             }
         }

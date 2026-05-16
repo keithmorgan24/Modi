@@ -16,6 +16,8 @@ import androidx.compose.ui.platform.LocalContext
 import com.keith.modi.utils.NetworkUtils
 import androidx.compose.foundation.layout.*
 import androidx.compose.material.icons.Icons
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material.icons.filled.SystemUpdate
 import androidx.compose.material.icons.filled.WifiOff
 import androidx.compose.material3.*
 import androidx.compose.ui.Alignment
@@ -172,7 +174,7 @@ fun ModiApp(mainViewModel: MainViewModel = viewModel()) {
     appRelease?.let { release ->
         AlertDialog(
             onDismissRequest = { if (!release.isCritical) mainViewModel.dismissUpdateDialog() },
-            icon = { Icon(Icons.Default.WifiOff, null, tint = MaterialTheme.colorScheme.primary) }, // Using a generic icon or could use system_update
+            icon = { Icon(Icons.Default.SystemUpdate, null, tint = MaterialTheme.colorScheme.primary) },
             title = { Text("Update Available", fontWeight = FontWeight.Bold) },
             text = {
                 Column(horizontalAlignment = Alignment.CenterHorizontally) {
@@ -180,6 +182,21 @@ fun ModiApp(mainViewModel: MainViewModel = viewModel()) {
                         "A new version of Modi (${release.versionName}) is available. We recommend downloading the latest version to avoid inconveniences.",
                         textAlign = TextAlign.Center
                     )
+                    
+                    // PENDO: Diagnostic Info - Helps identify why update prompt persists
+                    Spacer(modifier = Modifier.height(12.dp))
+                    Surface(
+                        color = MaterialTheme.colorScheme.surfaceVariant,
+                        shape = RoundedCornerShape(8.dp)
+                    ) {
+                        Text(
+                            "Current: ${getAppVersionCode(context)} | Latest: ${release.versionCode}",
+                            style = MaterialTheme.typography.labelSmall,
+                            modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp),
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    }
+
                     if (!release.releaseNotes.isNullOrBlank()) {
                         Spacer(modifier = Modifier.height(8.dp))
                         Text(
@@ -280,5 +297,19 @@ private fun isOfflineAllowed(route: String): Boolean {
     return when(route) {
         "main", "support", "privacy_security" -> true
         else -> false
+    }
+}
+
+private fun getAppVersionCode(context: android.content.Context): Int {
+    return try {
+        val packageInfo = context.packageManager.getPackageInfo(context.packageName, 0)
+        if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.P) {
+            packageInfo.longVersionCode.toInt()
+        } else {
+            @Suppress("DEPRECATION")
+            packageInfo.versionCode
+        }
+    } catch (e: Exception) {
+        0
     }
 }

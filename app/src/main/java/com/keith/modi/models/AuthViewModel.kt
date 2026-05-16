@@ -251,11 +251,15 @@ class AuthViewModel : ViewModel() {
         viewModelScope.launch {
             _authState.value = AuthState.Loading
             try {
-                // In a production app, you would call a Supabase Edge Function here 
-                // to handle the secure deletion of user data and the auth record.
-                // For now, we sign out and set a state.
+                // 1. Call the Secure RPC function to delete the auth.users record
+                // This is the "Nuclear Option" that actually deletes the login credentials.
+                Supabase.client.postgrest.rpc("delete_user_account")
+
+                // 2. Clear the local session
                 Supabase.client.auth.signOut()
-                _authState.value = AuthState.Error("Deletion request submitted. You have been logged out.")
+                
+                // 3. Trigger redirect to Welcome screen
+                _authState.value = AuthState.Idle
             } catch (e: Exception) {
                 _authState.value = AuthState.Error(ErrorUtils.sanitizeError(e))
             }
@@ -277,8 +281,12 @@ class AuthViewModel : ViewModel() {
         viewModelScope.launch {
             _authState.value = AuthState.Loading
             try {
-                // PENDO SECURITY: Generic response to prevent user enumeration
-                Supabase.client.auth.resetPasswordForEmail(email)
+                // PENDO SECURITY: Request reset with explicit deep link redirect
+                // This ensures the link in the email knows how to open the Modi app
+                Supabase.client.auth.resetPasswordForEmail(
+                    email = email,
+                    redirectUrl = "modiapp://reset-password"
+                )
                 _authState.value = AuthState.PasswordResetRequested
             } catch (e: Exception) {
                 _authState.value = AuthState.Error(ErrorUtils.sanitizeError(e))

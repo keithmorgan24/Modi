@@ -14,8 +14,8 @@ android {
         applicationId = "com.keith.modi"
         minSdk = 24
         targetSdk = 35
-        versionCode = 1
-        versionName = "1.0"
+        versionCode = 7
+        versionName = "1.6"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
 
@@ -36,8 +36,9 @@ android {
 
     buildTypes {
         release {
-            isMinifyEnabled = false // Temporarily disable for debugging the "Invalid Package" error
-            isShrinkResources = false
+            signingConfig = signingConfigs.getByName("debug")
+            isMinifyEnabled = false // Temporarily disable minification to ensure a stable, full-sized build
+            isShrinkResources = false 
             proguardFiles(
                 getDefaultProguardFile("proguard-android-optimize.txt"),
                 "proguard-rules.pro"
